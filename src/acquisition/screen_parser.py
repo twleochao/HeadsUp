@@ -5,9 +5,10 @@ import mss
 import json
 from pathlib import Path
 from typing import Dict, Any
+from itertools import chain
 
 class ScreenScraper:
-    def __init__(self, config_path: str = "src\\acquisition\\config.json"):
+    def __init__(self, config_path: str = "config.json"):
         config_path = Path(config_path)
 
         with open(config_path, 'r') as f:
@@ -15,6 +16,15 @@ class ScreenScraper:
         self.roi = cfg["main_roi"] 
         self.sub_rois = cfg.get("sub_rois", {})
         self.sct = mss.mss()
+
+    def normalize_rois(self, val):
+        if isinstance(val, dict):
+            return [val]
+        if isinstance(val, list):
+            if any(isinstance(item, list) for item in val):
+                return list(chain.from_iterable(val))
+            return val
+        return []
 
     def grab_frame(self):
         monitor = {
@@ -31,18 +41,18 @@ class ScreenScraper:
     def preprocess(self, img: np.ndarray):
         crops = {}
         for key, val in self.sub_rois.items():
-            entries = val if isinstance(val, list) else [val]
+            rois = self.normalize_rois(val)
             crops[key] = []
-            for r in entries:
-                x, y, w, h = r["x"], ["y"], ["w"], ["h"]
-
+            for r in rois:
+                x, y = int(r.get("x", 0)), int(r.get("y", 0))
+                w, h = int(r.get("w", 0)), int(r.get("h", 0))
                 sub = img[y:y+h, x:x+w]
                 gray = cv2.cvtColor(sub, cv2.COLOR_BGR2GRAY)
-                _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+                _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
                 crops[key].append(thresh)
-        return img
+        return crops 
 
-    def do_ocr(self, img:np.ndarray, config: str):
+    def do_ocr(self, img:np.ndarray, config: str = ""):
         return pytesseract.image_to_string(img, config=config).strip()
 
     def parse_text(self, raw: str, region: str):
@@ -105,6 +115,6 @@ class ScreenScraper:
 
 
 if __name__ == "__main__":
-    scraper = ScreenScraper(config_path="src\\acquisition\\config.json")
+    scraper = ScreenScraper(config_path="config.json")
     frame = scraper.get_game_frame()
     print(frame)
