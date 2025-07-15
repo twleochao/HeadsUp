@@ -2,7 +2,7 @@ import cv2
 import pytesseract
 import numpy as np
 import mss
-from typing import Dict
+from typing import Dict, Any
 
 class ScreenScraper:
     def __init__(self, roi: Dict[str, int], sub_rois: Dict[str, Dict]):
@@ -20,8 +20,7 @@ class ScreenScraper:
 
         sct_img = self.sct.grab(monitor)
         img = np.array(sct_img)
-        bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        return bgr
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
     def preprocess(self, img: np.ndarry):
         crops = {}
@@ -34,19 +33,29 @@ class ScreenScraper:
 
         return img
 
-    def do_ocr(self, img):
-        # TODO: pytesseract.image_to_string(img, config=...)
-        return ""
+    def do_ocr(self, img:np.ndarray, config: str):
+        return pytesseract.image_to_string(img, config=config).strip()
 
-    def parse_text(self, raw: str):
-        # TODO: regex or heuristics to extract numbers, card codes, names
-        return {}
+    def parse_text(self, raw: str, region: str):
+        if region == "pot":
+            digits = "".join(ch for ch in raw if ch.isdigit())
+            return int(digits) if digits else None
+        elif region in ("flop", "turn", "river", "hand"):
+            return raw.split()
+        elif region == "player_names":
+            return raw
+        return raw
 
     def get_game_frame(self):
+        frame: Dict[str, Any] = {}
         img = self.grab_frame()
-        prep = self.preprocess(img)
-        text = self.do_ocr(prep)
-        frame = self.parse_text(text)
+        crops = self.preprocess(img)
+
+        for key, crop_img in crops.items():
+            text = self.do_ocr(crop_img)
+            parsed = self.parse_text(text, key)
+            frame[key] = parsed
+
         return frame
 
 
