@@ -2,13 +2,19 @@ import cv2
 import pytesseract
 import numpy as np
 import mss
+import json
+from pathlib import Path
 from typing import Dict, Any
 
 class ScreenScraper:
-    def __init__(self, roi: Dict[str, int], sub_rois: Dict[str, Dict]):
-        self.roi = roi
+    def __init__(self, config_path: str = "src\\acquisition\\config.json"):
+        config_path = Path(config_path)
+
+        with open(config_path, 'r') as f:
+            cfg = json.load(f)
+        self.roi = cfg["main_roi"] 
+        self.sub_rois = cfg.get("sub_rois", {})
         self.sct = mss.mss()
-        self.sub_rois = sub_rois
 
     def grab_frame(self):
         monitor = {
@@ -22,15 +28,18 @@ class ScreenScraper:
         img = np.array(sct_img)
         return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
-    def preprocess(self, img: np.ndarry):
+    def preprocess(self, img: np.ndarray):
         crops = {}
-        for key, r in self.sub_rois.items():
-            x, y, w, h = r["x"], r["y"], r["w"], r["h"]
-            sub = img[y:y+h, x:x+w]
-            gray = cv2.cvtColor(sub, cv2.COLOR_BGR2GRAY)
-            _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-            crops[key] = thresh
+        for key, val in self.sub_rois.items():
+            entries = val if isinstance(val, list) else [val]
+            crops[key] = []
+            for r in entries:
+                x, y, w, h = r["x"], ["y"], ["w"], ["h"]
 
+                sub = img[y:y+h, x:x+w]
+                gray = cv2.cvtColor(sub, cv2.COLOR_BGR2GRAY)
+                _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+                crops[key].append(thresh)
         return img
 
     def do_ocr(self, img:np.ndarray, config: str):
@@ -40,10 +49,26 @@ class ScreenScraper:
         if region == "pot":
             digits = "".join(ch for ch in raw if ch.isdigit())
             return int(digits) if digits else None
-        elif region in ("flop", "turn", "river", "hand"):
-            return raw.split()
-        elif region == "player_names":
-            return raw
+
+        if region in ("flop", "turn", "river", "hand"):
+            parts = raw.replace("\n", " ").split()
+            return [p for p in parts if len(p) in (2, 3)]
+
+        if region == "player_actions":
+            tokens = raw.lower().replace(":", "").split()
+            action = {}
+            if "seat" in tokens:
+                i = tokens.index("seat")
+                action["seat"] = int(tokens[i+1]) if i+1 < len(tokens) and tokens[i+1].isdigit() else None
+            for act in ("bet", "call", "raise", "fold", "check"):
+                if act in tokens:
+                    action["action"] = act
+                    idx = tokens.index(act)
+                    if idx+1 < len(tokens) and tokens[idx+1].isdigit():
+                        action["amount"] = int(tokens[idx+1])
+                    break
+            return action
+        
         return raw
 
     def get_game_frame(self):
@@ -51,14 +76,35 @@ class ScreenScraper:
         img = self.grab_frame()
         crops = self.preprocess(img)
 
-        for key, crop_img in crops.items():
-            text = self.do_ocr(crop_img)
-            parsed = self.parse_text(text, key)
-            frame[key] = parsed
+        for key, imgs in crops.items():
+            parsed = [self.parse_text(self.do_ocr(im), key) for im in imgs]
+            frame[key] = parsed if len(parsed) > 1 else (parsed[0] if parsed else None)
+
+        community = []
+        for sec in ("flop", "turn", "river"):
+            val = frame.pop(sec, None)
+            if isinstance(val, list):
+                community.extend(val)
+            elif val:
+                community.append(val)
+        frame["community_cards"] = community
+
+        names = frame.pop("player_names", []) or []
+        players = [{"seat": i+1, "name": nm} for i, nm in enumerate(names)]
+        frame["players"] = players
+
+        actions = frame.pop("last_action", []) or []
+
+        for i, action in enumerate(actions):
+            if i < len(players):
+                players[i]["last_action"] = action
+
+        frame["pot"] = frame.pop("pot", None)
 
         return frame
 
 
 if __name__ == "__main__":
-    roi = {"x": 100, "y": 100, "w": 800, "h": 600} #fill out 
-    scraper = ScreenScraper(roi)
+    scraper = ScreenScraper(config_path="src\\acquisition\\config.json")
+    frame = scraper.get_game_frame()
+    print(frame)
