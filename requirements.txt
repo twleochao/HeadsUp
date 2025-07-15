@@ -1,0 +1,12 @@
+opencv-python
+pytesseract
+SQLAlchemy
+numpy
+pandas
+openai
+fastapi
+uvicorn
+PyQt5
+matplotlib
+websockets
+python-dotenv
