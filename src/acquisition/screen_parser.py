@@ -8,7 +8,7 @@ from typing import Dict, Any
 from itertools import chain
 
 class ScreenScraper:
-    def __init__(self, config_path: str = "config.json"):
+    def __init__(self, config_path: str="./src/acquisition/config.json"):
         config_path = Path(config_path)
 
         with open(config_path, 'r') as f:
@@ -115,6 +115,6 @@ class ScreenScraper:
 
 
 if __name__ == "__main__":
-    scraper = ScreenScraper(config_path="config.json")
+    scraper = ScreenScraper(config_path="./src/acquisition/config.json")
     frame = scraper.get_game_frame()
     print(frame)
