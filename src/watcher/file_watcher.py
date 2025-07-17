@@ -1,9 +1,9 @@
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-from pathlib import Path
 import time
 import os
 import threading
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from pathlib import Path
 
 class HandHistoryHandler(FileSystemEventHandler):
     def __init__(self, file_path, new_hand_callback):
