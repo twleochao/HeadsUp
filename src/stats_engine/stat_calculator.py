@@ -1,5 +1,5 @@
-from typing import Dict, Any, List
-from acquisition.parser import Hand, Action, Player
+from typing import Dict, Any
+from acquisition.parser import Hand, Action
 
 
 class StatsCalculator:
@@ -19,58 +19,14 @@ class StatsCalculator:
         self.current_stack: float = 0.0
 
         # ─── Preflop counters ──────────────────────────────────
-        self.preflop = {
-            'vpip': 0,      # voluntarily put money in pot
-            'pfr': 0,       # preflop raise
-            'fs': 0,        # flop seen
-            'cpfr': 0,      # called preflop raise
-            'uopr': 0,      # unopened preflop raise
-            '3bet': 0,
-            '4bet': 0,
-            'f3b': 0,       # folded to 3-bet
-            'f4b': 0,       # folded to 4-bet
-            'sq': 0,        # squeeze bet
-            'fsqr': 0,      # folded to squeeze
-            'fsqc': 0,      # called squeeze
-        }
+        self.preflop = {k: 0 for k in ('vpip', 'pfr', 'fs', 'cpfr', 'uopfr', '3bet', '4bet' , 'f3b', 'f4b', 'sq', 'fsqr', 'fsqc')}
+        #voluntarily put money in pot, preflop raise, flop seen, called preflop raise, unopened preflop raise, 3bet, 4bet, fold to 3 bet, fold to 4 bet, squeeze bet, fold to squeeze when raise, fold to squeeze when call 
+        self.steal = {k: 0 for k in ('bsa', 'fb', 'cs', 'rs', 'fr')}
+        # blind steal attempts, fold to steal, called steal, resteal, fold to resteal
+        self.postflop = {k: 0 for k in ('agg', 'af', 'cr', 'fcr', 'cbet', 'fcb', 'rcb', 'frcb', 'cbet_3', 'fcb_3', 'db', 'fdb', 'cdb', 'wts', 'was', 'wws')}
+        # aggression, aggression factor, check raise, fold to check raise, cbet, fold to cbet, raise cbet, fold to raise cbet, cbet on 3bet, fold to cbet on 3bet, donk bet, fold to donk bet, call donk bet, went to showdown, won at showdown, won without showdown
 
-        # ─── Steal counters ────────────────────────────────────
-        self.steal = {
-            'bsa': 0,       # blind steal attempts
-            'fb': 0,        # folded to steal
-            'cs': 0,        # cold call steal
-            'rs': 0,        # re-steal attempts
-            'fr': 0,        # folded to re-steal
-        }
-
-        # ─── Postflop counters ─────────────────────────────────
-        self.postflop = {
-            'agg_bets': 0,      # total bets + raises
-            'calls': 0,
-            'bets': 0,
-            'raises': 0,
-            'cr': 0,            # check-raises
-            'fcr': 0,           # folded to check-raise
-            'cbet': 0,          # continuation bets
-            'fcb': 0,           # folded to continuation bet
-            'rcb': 0,           # raised continuation bet
-            'frcb': 0,          # folded to raised cbet
-            'cbet3': 0,         # cbet on flop in 3-bet pot
-            'fcb3': 0,          # folded to cbet on flop in 3-bet pot
-            'donk': 0,          # donk bets
-            'fdb': 0,           # folded to donk bet
-            'cdb': 0,           # called donk bet
-            'wts': 0,           # went to showdown
-            'was': 0,           # won at showdown
-            'wws': 0,           # won without showdown
-        }
-
-        # ─── Position heatmap ──────────────────────────────────
-        # Track how often we see each position and take VPIP/PFR/3B there
-        self.by_pos: Dict[str, Dict[str, int]] = {
-            pos: {'seen': 0, 'vpip': 0, 'pfr': 0, '3bet': 0}
-            for pos in self.POSITIONS
-        }
+        self.by_pos: Dict[int, Dict[str, int]] = {}
 
     def reset(self):
         self.__init__(self.player)
