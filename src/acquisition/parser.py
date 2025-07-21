@@ -61,8 +61,7 @@ def parse_hand(hand_text: str) -> Hand:
         stakes=m.group('stakes').strip(),
         date=m.group('date').strip(),
         table='',
-        button_seat=0,
-        **{}
+        button_seat=0
     )
 
     # Parse table/button

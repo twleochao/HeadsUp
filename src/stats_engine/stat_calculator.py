@@ -3,10 +3,8 @@ from acquisition.parser import Hand, Action
 
 
 class StatsCalculator:
-    """
-    Tracks all raw counters for a single player, then computes
-    VPIP, PFR, FS, 3-bet, 4-bet, steals, postflop aggression, etc.
-    """
+    STREETS = ('FLOP', 'TURN', 'RIVER')
+    PO_POS = ('IP', 'OOP')
     POSITIONS = ('BB', 'SB', 'BTN', 'CO', 'MP', 'EP')
 
     def __init__(self, player_name: str):
@@ -21,36 +19,64 @@ class StatsCalculator:
         # ─── Preflop counters ──────────────────────────────────
         self.preflop = {k: 0 for k in ('vpip', 'pfr', 'fs', 'cpfr', 'uopfr', '3bet', '4bet' , 'f3b', 'f4b', 'sq', 'fsqr', 'fsqc')}
         #voluntarily put money in pot, preflop raise, flop seen, called preflop raise, unopened preflop raise, 3bet, 4bet, fold to 3 bet, fold to 4 bet, squeeze bet, fold to squeeze when raise, fold to squeeze when call 
+        self.by_pos: Dict[int, Dict[str, int]] = {}
+
         self.steal = {k: 0 for k in ('bsa', 'fb', 'cs', 'rs', 'fr')}
         # blind steal attempts, fold to steal, called steal, resteal, fold to resteal
-        self.postflop = {k: 0 for k in ('agg', 'af', 'cr', 'fcr', 'cbet', 'fcb', 'rcb', 'frcb', 'cbet_3', 'fcb_3', 'db', 'fdb', 'cdb', 'wts', 'was', 'wws')}
-        # aggression, aggression factor, check raise, fold to check raise, cbet, fold to cbet, raise cbet, fold to raise cbet, cbet on 3bet, fold to cbet on 3bet, donk bet, fold to donk bet, call donk bet, went to showdown, won at showdown, won without showdown
+        self.steal_by_pos: Dict[int, Dict[str,int]] = {}
 
-        self.by_pos: Dict[int, Dict[str, int]] = {}
+        self.postflop_street = {st : {k: 0 for k in ('bets', 'raises', 'calls', 'cr', 'fcr', 'cbet', 'fcb', 'rcb', 'frcb', 'cbet_3', 'fcb_3', 'db', 'fdb', 'cdb', 'wts', 'was', 'wws')} for st in self.STREETS}
+        # bets, raises, calls, check raise, fold to check raise, cbet, fold to cbet, raise cbet, fold to raise cbet, cbet on 3bet, fold to cbet on 3bet, donk bet, fold to donk bet, call donk bet, went to showdown, won at showdown, won without showdown
+        self.postflop_pos: Dict[str, Dict[str,int]] = {po: {'bets':0, 'raises':0, 'calls':0} for po in self.PO_POS}
+
+    def _actor_order(self, hand: Hand):
+        n = len(hand.players)
+        return list(range(2, n+1)) + [1]
 
     def reset(self):
         self.__init__(self.player)
 
     def update_with_hand(self, hand: Hand):
         """Tally counters for this player from a parsed Hand."""
-        # 1) initialize BB size & stack info
         if not self.big_blind_size:
-            # stakes format e.g. "$0.05/$0.10" or "0.05/0.10"
-            parts = hand.stakes.replace('$', '').split('/')
-            self.big_blind_size = float(parts[-1])
-        # find this player's seat & resulting stack (from summary)
+            self.big_blind_size = float(hand.stakes.replace('$', '').split('/')[-1])
         for p in hand.players:
             if p.name == self.player:
                 self.current_stack = p.stack
+                won = hand.win_amounts.get(self.player, 0.0)
+                self.total_bb_won += (won / self.big_blind_size)
+                pos_id = p.pos_id or 1
                 break
 
         self.hands_played += 1
 
-        # 2) SUMMARY: compute BB won this hand
-        #    TODO: parse the actual collected amount from Hand summary
-        # self.total_bb_won += (amount_collected / self.big_blind_size)
+        # preflop
+        pf = [a for a in hand.actions if a.street == 'PREFLOP']
 
-        # 3) POSITION: record which position we were in
+        self.by_pos.setdefault(pos_id, {'seen':0, 'vpip':0, 'pfr':0, '3bet':0})
+        self.by_pos[pos_id]['seen'] += 1
+
+        if any(a.player == self.player and a.action in ('calls', 'raises', 'bets') for a in pf):
+            self.preflop['vpip'] += 1
+            self.by_pos[pos_id]['vpip'] += 1
+
+        if any(a.player == self.player and a.action == 'raises' for a in pf):
+            self.preflop['pfr'] += 1
+            self.by_pos[pos_id]['pfr'] += 1
+
+        if hand.board['FLOP']:
+            self.preflop['fs'] += 1
+
+        if (any(a.player == self.player and a.action == 'calls' for a in pf) and any(a.action == 'raises' for a in pf)):
+            self.preflop['cpfr'] += 1
+        
+
+
+
+
+
+
+
         pos = None
         for p in hand.players:
             if p.name == self.player:
