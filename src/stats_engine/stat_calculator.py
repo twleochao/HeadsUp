@@ -70,180 +70,231 @@ class StatsCalculator:
         if (any(a.player == self.player and a.action == 'calls' for a in pf) and any(a.action == 'raises' for a in pf)):
             self.preflop['cpfr'] += 1
         
+        if (any(a.player == self.player and a.action == 'raises' for a in pf) and not any (a.player != self.player and a.action == 'raises' for a in pf)):
+            self.preflop['uopfr'] += 1
 
+        raises_all = [a for a in pf if a.action == 'raises']
+        ours = [a for a in raises_all if a.player == self.player]
 
-
-
-
-
-
-        pos = None
-        for p in hand.players:
-            if p.name == self.player:
-                pos = p.position  # parser should fill 'SB','BB', etc.
-        if pos in self.by_pos:
-            self.by_pos[pos]['seen'] += 1
-
-        # 4) PRE-FLOP
-        pf_actions = [a for a in hand.actions if a.street == 'PREFLOP']
-        # VPIP: any voluntary call/raise/bet (excluding blinds)
-        if any(a.player == self.player and a.action in ('calls','raises','bets')
-               for a in pf_actions):
-            self.preflop['vpip'] += 1
-            if pos in self.by_pos:
-                self.by_pos[pos]['vpip'] += 1
-        # PFR: any raise
-        if any(a.player == self.player and a.action == 'raises'
-               for a in pf_actions):
-            self.preflop['pfr'] += 1
-            if pos in self.by_pos:
-                self.by_pos[pos]['pfr'] += 1
-        # FS: saw the flop?
-        if hand.board['FLOP']:
-            self.preflop['fs'] += 1
-        # CPFR: called after someone raised preflop
-        if any(a.player == self.player and a.action == 'calls'
-               for a in pf_actions) and any(a.action == 'raises' for a in pf_actions):
-            self.preflop['cpfr'] += 1
-        # UOPR: first raise (open raise)
-        if (any(a.player == self.player and a.action == 'raises' for a in pf_actions)
-            and not any(a.action == 'raises' for a in pf_actions if a.player != self.player)):
-            self.preflop['uopr'] += 1
-        # 3-bet & 4-bet detection
-        raises = [a for a in pf_actions if a.action == 'raises']
-        our_raises = [a for a in raises if a.player == self.player]
-        if len(raises) >= 2 and our_raises:
-            # crude: if we are second raiser => 3-bet
-            if raises.index(our_raises[0]) == 1:
+        if len(raises_all) >= 2 and ours:
+            idx = raises_all.index(ours[0])
+            if idx == 1:
                 self.preflop['3bet'] += 1
-                if pos in self.by_pos:
-                    self.by_pos[pos]['3bet'] += 1
-            # if we are third raiser => 4-bet
-            if raises.index(our_raises[0]) == 2:
+                self.by_pos[pos_id]['3bet'] += 1
+            elif idx == 2:
                 self.preflop['4bet'] += 1
-        # F3B/F4B: folded to 3-bet/4-bet
-        if any(a.player == self.player and a.action == 'folds' for a in pf_actions):
-            # if there's been a 3-bet before our fold
-            if any(r for r in raises if raises.index(r) == 1 and r.player != self.player):
+
+        if any(a.player == self.player and a.action == 'folds' for a in pf):
+            if any(r for r in raises_all if raises_all.index(r) == 1 and r.player != self.player):
                 self.preflop['f3b'] += 1
-            if any(r for r in raises if raises.index(r) == 2 and r.player != self.player):
+            if any(r for r in raises_all if raises_all.index(r) == 2 and r.player != self.player):
                 self.preflop['f4b'] += 1
-        # Squeeze: we raise after a limp + raise
-        if len(raises) == 2 and our_raises:
+
+        if len(raises_all) == 2 and ours:
             self.preflop['sq'] += 1
-        # Fold/Call to squeeze
-        # TODO: detect if the raise was a squeeze, then track fsqr, fsqc
 
-        # 5) STEALS (typically from SB/BTN vs only blinds)
-        # TODO: refine definition: a raise from SB/BTN when no other callers
-        preflop_posters = [a for a in pf_actions if a.action.startswith('posts')]
-        if pos in ('SB','BTN') and any(a.player == self.player and a.action == 'raises'
-                                         for a in pf_actions):
-            self.steal['bsa'] += 1
-        if any(a.player == self.player and a.action == 'folds' for a in pf_actions
-               ) and any(a.action == 'raises' for a in pf_actions if a.player != self.player):
-            self.steal['fb'] += 1
-        # TODO: detect cold-call vs steal (cs), re-steal (rs), fold to re-steal (fr)
+        for a in pf:
+            if a.player == self.player and a.action == 'folds':
+                if len(raises_all) >= 2:
+                    if not (len(raises_all) >= 3 and raises_all[2].player == self.player):
+                        idx = [i for i, x in enumerate(pf) if x.player == self.player and x.action == 'folds'][0]
+                        i2 = pf.index(raises_all[1])
+                        if idx>i2:
+                            self.preflop['fsqr'] += 1
+                if len(raises_all) >= 3 and raises_all[2].player == self.player:
+                    self.preflop['fsqc'] += 1
 
-        # 6) POST-FLOP
-        for street in ('FLOP','TURN','RIVER'):
-            street_actions = [a for a in hand.actions if a.street == street]
-            for a in street_actions:
+        # steal
+        if pos_id in (1,2):
+            if any(a.player == self.player and a.action == 'raises' for a in pf):
+                self.steal['bsa'] += 1
+                self.steal_by_pos.setdefault(pos_id, {'bsa':0, 'fb':0, 'cs':0, 'rs':0, 'fr':0})
+                self.steal_by_pos[pos_id]['bsa'] += 1
+            if any(a.player == self.player and a.action == 'folds' for a in pf):
+                if any(a.action == 'raises' and a.player != self.player for a in pf):
+                    self.steal['fb'] += 1
+                    self.steal_by_pos[pos_id]['fb'] += 1
+            if any(a.player == self.player and a.action == 'calls' for a in pf) and not any(x.action == 'posts' for x in pf if x.player == self.player):
+                if any(a.action == 'raises' and a.player != self.player for a in pf):
+                    self.steal['cs'] += 1
+                    self.steal_by_pos[pos_id]['cs'] = self.steal_by_pos.get(pos_id, {}).get('cs', 0) + 1
+            if any(a.action == self.player and a.action == 'raises' for a in pf) and any(x.action == 'raises' and x.player != self.player for x in pf):
+                self.steal['rs'] += 1
+                self.steal_by_pos[pos_id]['rs'] = self.steal_by_pos.get(pos_id, {}).get('fr', 0) + 1
+            if any(a.player == self.player and a.action == 'folds' for a in pf) and len([x for x in pf if x.action == 'raises']) >= 2:
+                self.steal['fr'] += 1
+                self.steal_by_pos[pos_id]['fr'] = self.steal_by_pos.get(pos_id, {}).get('fr', 0) + 1
+        
+        # postflop
+        pf_aggs = [a for a in pf if a.action in ('bets', 'raises')]
+        last_pf_agg = pf_aggs[-1].player if pf_aggs else None
+        pf_3bpot = len(raises_all) >= 2
+
+        actor_order = self._actor_order(hand)
+
+        for st in self.STREETS:
+            st_acts = [a for a in hand.actions if a.street = st]
+
+            st_aggs = [a for a in st_acts if a.action in ('bets', 'raises')]
+            for idx, a in enumerate(st_acts):
                 if a.player != self.player:
                     continue
-                if a.action == 'bets':
-                    self.postflop['bets'] += 1
+
+                prev_aggs = [x for x in st_aggs if st_acts.index(x) < idx]
+                last_agg = prev_aggs[-1] if prev_aggs else None
+
+                if last_agg:
+                    me_idx = actor_order.index(p.pos_idx)
+                    la_idx = actor_order.index(last_agg.pos_id)
+                    po = 'IP' if me_idx > la_idx else 'OOP'
+                else:
+                    po = 'IP'
+                self.postflop_pos[po][a.action] += 1
+
+                self.postflop_street[st][a.action] += 1 
+
                 if a.action == 'raises':
-                    self.postflop['raises'] += 1
-                if a.action == 'calls':
-                    self.postflop['calls'] += 1
-                if a.action == 'checks' and any(
-                    b for b in street_actions if b.action in ('bets','raises')
-                ):
-                    # we faced a bet and checked => folded to c-r
-                    self.postflop['fcr'] += 1
-                # Check-raise
-                # TODO: detect check-raise sequence (cr)
-            # continuation bet on flop
-            if street == 'FLOP':
-                # if we were the last aggressor preflop and we bet flop
-                if any(a.player == self.player and a.action == 'bets'
-                       for a in street_actions):
-                    self.postflop['cbet'] += 1
-            # donk bets: bet when not last aggressor
-            # TODO
+                    my_acts = [x for x in st_acts if x.player == self.player]
+                    if any(x.action == 'checks' for x in my_acts):
+                        self.postflop_street[st]['cr'] += 1
 
-        # Showdown & wins
-        if hand.showdown.get(self.player):
-            self.postflop['wts'] += 1
-            if self.player in hand.winners:
-                self.postflop['was'] += 1
-        else:
-            # if we collected without showdown
-            if self.player in hand.winners:
-                self.postflop['wws'] += 1
+                if a.action == 'folds' and last_agg and last_agg.action == 'raises':
+                    op_acts = [x for x in st_acts if x.player == last_agg.player]
+                    if any(x.action == 'checks' for x in op_acts[:op_acts.index(last_agg)]):
+                        self.postflop_street[st]['fcr'] += 1
+                
+                if st == 'FLOP' and a.action == 'bets' and last_pf_agg == self.player:
+                    self.postflop_street[st]['cbet'] += 1
+                    if pf_3bpot:
+                        self.postflop_street[st]['cbet3'] += 1
 
-    def compute_stats(self) -> Dict[str, Any]:
-        """Compute derived percentages, ratios, and per-100-hand figures."""
-        hp = max(self.hands_played, 1)
-        calls = self.postflop['calls']
-        bets = self.postflop['bets']
-        raises = self.postflop['raises']
+                if st == 'FLOP' and a.action == 'folds' and last_agg and last_agg.player != self.player and last_agg.action == 'bets' and last_pf_agg == self.player:
+                    self.postflop_street[st]['fcb'] += 1
+                    if pf_3bpot:
+                        self.postflop_street[st]['fcb3'] += 1
 
-        out: Dict[str, Any] = {
-            # Summary
-            'Hands': self.hands_played,
-            'TBB/100': (self.total_bb_won / hp) * 100,
-            'M': (self.current_stack / (self.big_blind_size * 2)) if self.big_blind_size else 0,
-            'BB_remain': (self.current_stack / self.big_blind_size) if self.big_blind_size else 0,
-            # Preflop
-            'VPIP%': self.preflop['vpip'] / hp * 100,
-            'PFR%': self.preflop['pfr'] / hp * 100,
-            'FS%': self.preflop['fs'] / hp * 100,
-            'CPFR%': self.preflop['cpfr'] / hp * 100,
-            'UOPR%': self.preflop['uopr'] / hp * 100,
-            '3B%': self.preflop['3bet'] / hp * 100,
-            '4B%': self.preflop['4bet'] / hp * 100,
-            'F3B%': self.preflop['f3b'] / hp * 100,
-            'F4B%': self.preflop['f4b'] / hp * 100,
-            'Sq%': self.preflop['sq'] / hp * 100,
-            # Steal
-            'BSA%': self.steal['bsa'] / hp * 100,
-            'FB%': self.steal['fb'] / hp * 100,
-            # Postflop
-            'Agg%': (bets + raises) / calls * 100 if calls else None,
-            'AF': (bets + raises) / calls if calls else None,
-            'CR%': self.postflop['cr'] / hp * 100,
-            'FCR%': self.postflop['fcr'] / hp * 100,
-            'CBet%': self.postflop['cbet'] / hp * 100,
-            'FCB%': self.postflop['fcb'] / hp * 100,
-            'RCB%': self.postflop['rcb'] / hp * 100,
-            'FRCB%': self.postflop['frcb'] / hp * 100,
-            'Donk%': self.postflop['donk'] / hp * 100,
-            'FDB%': self.postflop['fdb'] / hp * 100,
-            'CDB%': self.postflop['cdb'] / hp * 100,
-            'WTS%': self.postflop['wts'] / hp * 100,
-            'WAS%': self.postflop['was'] / hp * 100,
-            'WWS%': self.postflop['wws'] / hp * 100,
-            # Positional breakdown
-            'ByPos': {
-                pos: {
-                    'Seen': self.by_pos[pos]['seen'],
-                    'VPIP%': self.by_pos[pos]['vpip'] / max(self.by_pos[pos]['seen'], 1) * 100,
-                    'PFR%':  self.by_pos[pos]['pfr'] / max(self.by_pos[pos]['seen'], 1) * 100,
-                    '3B%':   self.by_pos[pos]['3bet'] / max(self.by_pos[pos]['seen'], 1) * 100,
-                }
-                for pos in self.POSITIONS
+                if st=='FLOP' and a.action=='raises' and last_agg and last_pf_agg==self.player and last_agg.player!=self.player and last_agg.action=='bets':
+                    self.postflop_street[st]['rcb'] +=1
+
+                if st=='FLOP' and a.action=='folds' and last_agg and last_pf_agg==self.player and last_agg.player!=self.player and last_agg.action=='raises':
+                    self.postflop_street[st]['frcb'] +=1
+
+                if a.action=='bets' and last_pf_agg!=self.player and not prev_aggs:
+                    self.postflop_street[st]['donk'] +=1
+
+                if a.action=='folds' and last_agg and last_pf_agg!=self.player and last_agg.action=='bets':
+                    self.postflop_street[st]['fdb'] +=1
+
+                if a.action=='calls' and last_agg and last_pf_agg!=self.player and last_agg.action=='bets':
+                    self.postflop_street[st]['cdb'] +=1
+
+            if self.player in hand.showdown:
+                self.postflop_street[st]['wts'] +=1
+                if self.player in hand.winners:
+                    self.postflop_street[st]['was'] +=1
+            elif self.player in hand.winners:
+                self.postflop_street[st]['wws'] +=1
+
+    def compute_stats(self) -> Dict[str,Any]:
+        """Return nested stats for GUI consumption."""
+        hp = max(self.hands_played,1)
+
+        pf_ov = {
+            'VPIP%':  self.preflop['vpip']/hp*100,
+            'PFR%':   self.preflop['pfr']/hp*100,
+            'FS%':    self.preflop['fs']/hp*100,
+            'CPFR%':  self.preflop['cpfr']/hp*100,
+            'UOPR%':  self.preflop['uopr']/hp*100,
+            '3B%':    self.preflop['3bet']/hp*100,
+            '4B%':    self.preflop['4bet']/hp*100,
+        }
+        pf_bp = {
+            pos: {
+                'Seen': self.by_pos[pos]['seen'],
+                'VPIP%': self.by_pos[pos]['vpip']/max(self.by_pos[pos]['seen'],1)*100,
+                'PFR%':  self.by_pos[pos]['pfr']/max(self.by_pos[pos]['seen'],1)*100,
+                '3B%':   self.by_pos[pos]['3bet']/max(self.by_pos[pos]['seen'],1)*100,
+            }
+            for pos in sorted(self.by_pos)
+        }
+
+        st_ov = {
+            'BSA%': self.steal['bsa']/hp*100,
+            'FB%':  self.steal['fb']/hp*100,
+            'CS%':  self.steal['cs']/hp*100,
+            'RS%':  self.steal['rs']/hp*100,
+            'FR%':  self.steal['fr']/hp*100,
+        }
+        st_bp = {
+            pos: {
+                'BSA%': self.steal_by_pos[pos]['bsa']/hp*100,
+                'FB%':  self.steal_by_pos[pos]['fb']/hp*100,
+                'CS%':  self.steal_by_pos[pos].get('cs',0)/hp*100,
+                'RS%':  self.steal_by_pos[pos].get('rs',0)/hp*100,
+                'FR%':  self.steal_by_pos[pos].get('fr',0)/hp*100,
+            }
+            for pos in sorted(self.steal_by_pos)
+        }
+
+        tot_b = sum(self.postflop_street[s]['bets']   for s in self.STREETS)
+        tot_r = sum(self.postflop_street[s]['raises'] for s in self.STREETS)
+        tot_c = sum(self.postflop_street[s]['calls']  for s in self.STREETS)
+
+        pf_overall = {
+            'Agg%': (tot_b+tot_r)/tot_c*100 if tot_c else 0,
+            'AF':   (tot_b+tot_r)/tot_c     if tot_c else 0,
+            'WTS%': sum(self.postflop_street[s]['wts'] for s in self.STREETS)/hp*100,
+            'WAS%': sum(self.postflop_street[s]['was'] for s in self.STREETS)/hp*100,
+            'WWS%': sum(self.postflop_street[s]['wws'] for s in self.STREETS)/hp*100,
+        }
+
+        pf_bs = {
+            st: {
+                'Bet%':   self.postflop_street[st]['bets']/hp*100,
+                'Raise%': self.postflop_street[st]['raises']/hp*100,
+                'Call%':  self.postflop_street[st]['calls']/hp*100,
+                'CR%':    self.postflop_street[st]['cr']/hp*100,
+                'FCR%':   self.postflop_street[st]['fcr']/hp*100,
+                'CBet%':  self.postflop_street[st]['cbet']/hp*100,
+                'FCB%':   self.postflop_street[st]['fcb']/hp*100,
+                'RCB%':   self.postflop_street[st]['rcb']/hp*100,
+                'FRCB%':  self.postflop_street[st]['frcb']/hp*100,
+                'CBet3%': self.postflop_street[st]['cbet3']/hp*100,
+                'FCB3%':  self.postflop_street[st]['fcb3']/hp*100,
+                'DB%':    self.postflop_street[st]['donk']/hp*100,
+                'FDB%':   self.postflop_street[st]['fdb']/hp*100,
+                'CDB%':   self.postflop_street[st]['cdb']/hp*100,
+            }
+            for st in self.STREETS
+        }
+
+        pf_ip = {
+            po: {
+                'Bet%':   self.postflop_pos[po]['bets']/hp*100,
+                'Raise%': self.postflop_pos[po]['raises']/hp*100,
+                'Call%':  self.postflop_pos[po]['calls']/hp*100,
+            }
+            for po in self.PO_POS
+        }
+
+        return {
+            'Preflop':  {'overall': pf_ov, 'by_pos': pf_bp},
+            'Steal':    {'overall': st_ov, 'by_pos': st_bp},
+            'Postflop': {
+                'overall':   pf_overall,
+                'by_street': pf_bs,
+                'by_ip_oop': pf_ip
             }
         }
-        return out
+
+
+            
+
 
 
 class StatsManager:
     """
-    Holds one StatsCalculator per player. On each new Hand,
-    ensures calculators exist and updates all of them, then
-    can compute each player’s stat dictionary.
+    one for each player
     """
     def __init__(self):
         self.by_player: Dict[str, StatsCalculator] = {}
@@ -258,10 +309,6 @@ class StatsManager:
             calc.update_with_hand(hand)
 
     def compute_all(self) -> Dict[str, Any]:
-        """
-        Returns:
-            { player_name: { stat_name: value, ... }, ... }
-        """
         return {
             name: calc.compute_stats()
             for name, calc in self.by_player.items()

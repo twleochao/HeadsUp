@@ -1,3 +1,9 @@
-venv/
-.env        
-__pycache__/
+Stage	Feature Set	Time
+✅ MVP	Current viewer with jump + copy (c)	done
+1	Cursor + hjkl, 0/$, J/K	~2 hrs
+2	Word nav (w/b), visual mode (V), yank (y)	~3 hrs
+3	Citation copy refactored (c), session resume	~2 hrs
+4	Line wrapping + better text parsing	~2 hrs
+5	Optional: search (/, n), mark (m/a)	~3 hrs
+6	Bonus: BibTeX DOI, export citations	~3 hrs
+
