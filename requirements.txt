@@ -1,11 +1,7 @@
-opencv-python
 watchdog
-pytesseract
-SQLAlchemy
 numpy
 pandas
 openai
-fastapi
 uvicorn
 PyQt5
 matplotlib

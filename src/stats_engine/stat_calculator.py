@@ -133,7 +133,7 @@ class StatsCalculator:
         actor_order = self._actor_order(hand)
 
         for st in self.STREETS:
-            st_acts = [a for a in hand.actions if a.street = st]
+            st_acts = [a for a in hand.actions if a.street == st]
 
             st_aggs = [a for a in st_acts if a.action in ('bets', 'raises')]
             for idx, a in enumerate(st_acts):
