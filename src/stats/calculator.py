@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from acquisition.parser import Hand, Action
+from ingest.parser import Hand, Action
 
 
 class StatsCalculator:
