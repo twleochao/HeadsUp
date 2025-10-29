@@ -4,8 +4,8 @@ import win32con
 def list_windows():
     windows = {}
     
-    def enum_handler(hwnd):
-        if win32gui.IsWindowvisibl(hwnd) and win32gui.GetWindowText(hwnd):
+    def enum_handler(hwnd: int, _):
+        if win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd):
             style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
             if (style & win32con.WS_MAXIMIZEBOX) != 0 or (style & win32con.WS_MINIMIZEBOX) != 0:
                     windows[hwnd] = win32gui.GetWindowText(hwnd)
@@ -28,9 +28,15 @@ if __name__ == '__main__':
             print("...")
             break
 
-    test_title = "Google Gemini - Google Chrome"
-    hwnd = find_winndow_by_title(test_title)
-    if hwnd:
+    test1= "Google Gemini - Google Chrome"
+    test2 = "gagaga"
+    hwnd1 = find_winndow_by_title(test1)
+    hwnd2 = find_winndow_by_title(test2)
+    if hwnd1:
+        print("success")
+    else:
+        print("fail")
+    if hwnd2:
         print("success")
     else:
         print("fail")
