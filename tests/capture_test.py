@@ -3,14 +3,10 @@ import time
 import argparse
 from typing import Type
 from src.capture.base_capturer import BaseCapturer
-from src.capture.win_gdi_capturer import WinGDICapturer
-from src.capture.mss_capturer import MSSCapturer
 from src.capture.win_dxgi_capturer import WinDXGICapturer
 from src.capture.utils import list_windows
 
 CAPTURE_METHODS = {
-    "gdi": WinGDICapturer,
-    "mss": MSSCapturer,
     "dxgi": WinDXGICapturer,
 }
 
