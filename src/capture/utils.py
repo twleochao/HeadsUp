@@ -30,8 +30,8 @@ if __name__ == '__main__':
 
     test1= "Google Gemini - Google Chrome"
     test2 = "gagaga"
-    hwnd1 = find_winndow_by_title(test1)
-    hwnd2 = find_winndow_by_title(test2)
+    hwnd1 = find_window_by_title(test1)
+    hwnd2 = find_window_by_title(test2)
     if hwnd1:
         print("success")
     else:

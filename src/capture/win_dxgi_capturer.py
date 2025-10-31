@@ -32,7 +32,7 @@ class WinDXGICapturer(BaseCapturer):
             raise FileNotFoundError(f"Window not found: '{self.target_window_title}'")
             
         try:
-            self.capture = WindowsCapture(window_handle=self.hwnd)
+            self.capture = WindowsCapture(hwnd=self.hwnd)
             self.width = self.capture.width
             self.height = self.capture.height
 
