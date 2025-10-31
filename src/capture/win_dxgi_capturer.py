@@ -14,6 +14,7 @@ class WinDXGICapturer(BaseCapturer):
         self.last_timestamp: float = 0.0
         self.is_running: bool = False
         self.frame_lock: threading.Lock = threading.Lock()
+        self.capture_thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
         try:
@@ -27,16 +28,11 @@ class WinDXGICapturer(BaseCapturer):
                 w = frame.width
                 
                 raw_buffer = frame.frame_buffer
-                expected_size = h *w * 4
-                if raw_buffer is None or len(raw_buffer) != expected_size:
-                    return
-
                 try:
-                    frame_array = np.frombuffer(
-                        raw_buffer, dtype=np.uint8
-                    ).reshape((h, w, 4))
-                except ValueError as e:
-                    print(f"Error reshaping buffer: {e}. Buffer size: {len(raw_buffer)}, expected: {h*w*4}")
+                    frame_array_bgra = np.array(raw_buffer, copy=True, dtype=np.uint8)
+                    frame_array = frame_array_bgra.reshape((h, w, 4))
+                except Exception as e:
+                    print(f"Error processing frame: {e}. Buffer len: {len(raw_buffer) if raw_buffer else 'None'}. Expected: {h*w*4}")
                     return
 
                 with self.frame_lock:
@@ -57,7 +53,8 @@ class WinDXGICapturer(BaseCapturer):
                 print(f"Target window '{self.target_window_title}' was closed.")
                 self.stop()
             
-            self.capture.start()
+            self.capture_thread = threading.Thread(target=self.capture.start, daemon=True)
+            self.capture_thread.start()
             self.is_running = True
 
         except Exception as e:

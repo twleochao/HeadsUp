@@ -46,6 +46,7 @@ def main(method: str, title: str):
             
             frame_count = 0
             start_time = time.perf_counter()
+            fps = 0.0
             
             while True:
                 frame_data = capturer.grab()
@@ -84,7 +85,6 @@ def main(method: str, title: str):
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                     
-                time.sleep(0.001) 
 
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         print(f"Error: {e}")
