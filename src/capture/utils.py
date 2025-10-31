@@ -13,7 +13,7 @@ def list_windows():
     win32gui.EnumWindows(enum_handler, None)
     return windows
 
-def find_winndow_by_title(title):
+def find_window_by_title(title):
     try: 
         hwnd = win32gui.FindWindow(None, title)
         return hwnd if hwnd != 0 else None    
