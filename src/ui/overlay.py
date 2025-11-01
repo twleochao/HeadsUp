@@ -23,23 +23,26 @@ class HudOverlay(QMainWindow):
         self.pot_label.setStyleSheet("color: white; font-size: 16px; padding: 10px;")
         self.layout.addWidget(self.pot_label)
 
-        self.board_label = QLabel("Board: ---")  # <-- NEW
+        self.board_label = QLabel("Board: ---") 
         self.board_label.setStyleSheet("color: white; font-size: 16px; padding: 5px 10px;")
         self.layout.addWidget(self.board_label)
 
-        self.hero_cards_label = QLabel("Hero: ---")  # <-- NEW
+        self.hero_cards_label = QLabel("Hero: ---")
         self.hero_cards_label.setStyleSheet("color: #FFFF00; font-size: 16px; padding: 5px 10px;")
         self.layout.addWidget(self.hero_cards_label)
+
+        self.turn_label = QLabel("Turn: ---")
+        self.turn_label.setStyleSheet("color: #FF8C00; font-size: 16px; padding: 5px 10px;")
+        self.layout.addWidget(self.turn_label)
         
         self.action_label = QLabel("Action: ---")
         self.action_label.setStyleSheet("color: #00FF00; font-size: 18px; font-weight: bold; padding: 10px;")
         self.layout.addWidget(self.action_label)
 
-        self.setGeometry(50, 50, 300, 150) # x, y, w, h
+        self.setGeometry(50, 50, 300, 240)
 
     @Slot(str)
     def update_pot_display(self, pot_str: str):
-        """Public slot to update the pot label from the polling thread."""
         if pot_str:
             self.pot_label.setText(f"Pot: {pot_str}")
         else:
@@ -47,29 +50,16 @@ class HudOverlay(QMainWindow):
 
     @Slot(str)
     def update_board_display(self, board_str: str): 
-        """Public slot to update the board label."""
         self.board_label.setText(f"Board: {board_str}")
 
     @Slot(str)
     def update_hero_cards_display(self, cards_str: str):
-        """Public slot to update the hero cards label."""
         self.hero_cards_label.setText(f"Hero: {cards_str}")
 
     @Slot(str)
-    def update_action_display(self, action_str: str):
-        """Public slot to update the action label."""
-        self.action_label.setText(f"Action: {action_str}")
+    def update_turn_display(self, player_name: str):
+        self.turn_label.setText(f"Turn: {player_name}")
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    overlay = HudOverlay()
-    overlay.show()
-    
-    def test_update():
-        overlay.update_pot_display("100.5 BB")
-        overlay.update_action_display("RAISE 3bb")
-    
-    from PySide6.QtCore import QTimer
-    QTimer.singleShot(2000, test_update)
-    
-    sys.exit(app.exec())
+    @Slot(str)
+    def update_action_display(self, action_str: str):
+        self.action_label.setText(f"Action: {action_str}")

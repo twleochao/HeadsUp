@@ -1,25 +1,27 @@
 from PySide6.QtCore import QObject, Slot, Signal
-from PokerNow.models import GameState, PlayerInfo
+from PokerNow.models import GameState, PlayerInfo, PlayerState
 from src.core.datatypes import Street
+from src.api.models import PlayerData
 from typing import List
 
 class AppStateManager(QObject):
     ui_pot_updated = Signal(str)
     ui_board_updated = Signal(str)
     ui_hero_cards_updated = Signal(str)
+    ui_turn_updated = Signal(str)
 
     def __init__(self):
         super().__init__()
         self.current_street: Street = Street.PREFLOP
         self.pot_value: float = 0.0
         self.community_cards: List[str] = []
-        self.players: List[PlayerInfo] = []
         self.hero: PlayerInfo = None
+        self.processed_players: List[PlayerData] = []
+        self.current_player_name: str = "N/A"
         
     @Slot(object)
     def update_raw_game_state(self, raw_state: GameState):
         try:
-            # 1. Parse Community Cards and determine street
             self.community_cards = [str(card) for card in raw_state.community_cards]
             
             num_cards = len(self.community_cards)
@@ -36,27 +38,41 @@ class AppStateManager(QObject):
             self.pot_value = self._parse_stack_value(raw_state.pot_size)
             
             # 3. Parse Player Info and Find Hero
-            # --- THIS IS THE CRITICAL SECTION ---
-            # Ensure self.players is assigned the list from raw_state
-            self.players = raw_state.players 
             self.hero = None
-            
-            # This loop will now work
-            for player in self.players:
+            self.processed_players = []            
+            self.current_player_name = raw_state.current_player
+
+            for player in raw_state.players:
+                is_hero = False
                 if player.cards and 'Unknown' not in player.cards[0]:
-                    self.hero = player
+                    is_hero = True
                     
-            # 4. Emit signals with new, clean data for UI
+                processed_player = PlayerData(
+                    name=player.name, 
+                    stack=self._parse_stack_value(player.stack),
+                    bet=self._parse_stack_value(player.bet_value),
+                    is_hero=is_hero
+                )
+                self.processed_players.append(processed_player)
+                if is_hero:
+                    self.hero = processed_player
+
             self.ui_pot_updated.emit(str(self.pot_value))
             
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
             self.ui_board_updated.emit(board_str)
             
             if self.hero:
-                hero_cards_str = ", ".join(self.hero.cards)
-                self.ui_hero_cards_updated.emit(hero_cards_str)
+                raw_hero = next((p for p in raw_state.players if p.name == self.hero.name), None)
+                if raw_hero:
+                    hero_cards_str = ", ".join(raw_hero.cards)
+                    self.ui_hero_cards_updated.emit(hero_cards_str)
+                else:
+                    self.ui_hero_cards_updated.emit("Error")
             else:
                 self.ui_hero_cards_updated.emit("Spectator")
+
+            self.ui_turn_updated.emit(self.current_player_name)
         
         except Exception as e:
             print(f"CRITICAL ERROR in AppStateManager: {e}")

@@ -8,6 +8,7 @@ class Street(Enum):
     SHOWDOWN = auto()
 
 class Position(Enum):
+    UNKNOWN = auto()
     SB = auto()
     BB = auto()
     UTG = auto()

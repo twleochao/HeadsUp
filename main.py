@@ -6,7 +6,7 @@ from src.services.polling_service import PokerPoller
 from src.core.state_manager import AppStateManager
 
 POKER_NOW_GAME_URL = "https://www.pokernow.club/games/..." 
-POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pglExxElUxg_8m7WKWJ7ORl8C"
+POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pglsraz1lWEkWSLnk1tDwVf6o"
 
 if POKER_NOW_GAME_URL == "https://www.pokernow.club/games/...":
     print("="*50)
@@ -21,13 +21,16 @@ state_manager = AppStateManager()
 poller_thread = QThread()
 poller_worker = PokerPoller(POKER_NOW_GAME_URL)
 poller_worker.moveToThread(poller_thread)
+
 poller_thread.started.connect(poller_worker.run)
 poller_thread.finished.connect(poller_worker.stop)
+
 poller_worker.game_state_updated.connect(state_manager.update_raw_game_state)
+
 state_manager.ui_pot_updated.connect(hud.update_pot_display)
 state_manager.ui_board_updated.connect(hud.update_board_display)
 state_manager.ui_hero_cards_updated.connect(hud.update_hero_cards_display)
-
+state_manager.ui_turn_updated.connect(hud.update_turn_display)
 
 poller_thread.start()
 
