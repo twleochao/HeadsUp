@@ -3,6 +3,7 @@ numpy
 pydantic
 pytest
 selenium
-pokernow
+PokerNow
 pandas
 scikit-learn
+xgboost

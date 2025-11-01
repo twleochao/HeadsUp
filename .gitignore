@@ -3,7 +3,6 @@ __pycache__/
 venv/
 *.env
 .env
-.DS_Store
 .vscode/
 .idea/
 data/
@@ -12,4 +11,6 @@ data/
 *.csv
 *.parquet
 *.json
+*.pkl
 /eval_reports/
+chromedriver.exe
