@@ -37,7 +37,7 @@ class CalibrationWizard:
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         
         self.steps = [
-            ("master", 2, "Click TL/BR of the ENTIRE Game Area (black box)"),
+            ("master", 2, "Click TL/BR of the ENTIRE Game Area (Entire game window, excluding border)"),
             ("board_area", 2, "Click TL/BR of the Full Board (Flop 1 to River)"),
             ("pot", 2, "Click TL/BR of the Pot Area"),
             ("hero_seat", 2, "Click TL/BR for HERO'S Seat Box"),
@@ -125,7 +125,6 @@ class CalibrationWizard:
             cv2.destroyAllWindows()
 
     def process_rois(self, frame: np.ndarray):
-        """Derives all ROIs from the clicked anchor points."""
         try:
             master_rect = make_rect_from_clicks(self.clicks["master"][0], self.clicks["master"][1])
             master_w, master_h = master_rect[2], master_rect[3]
@@ -149,7 +148,7 @@ class CalibrationWizard:
                 master_resolution=(master_w, master_h),
                 board_rect=board_rect,
                 pot_rect=pot_rect,
-                seats_rects=seat_rects
+                seat_rects=seat_rects
             )
             
             save_path = f"data/{profile_name}.json"

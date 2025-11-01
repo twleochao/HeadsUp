@@ -61,16 +61,17 @@ class WinDXGICapturer(BaseCapturer):
             raise RuntimeError(f"Failed to start DXGI capture: {e}")
 
     def stop(self) -> None:
-        if self.capture and self.is_running:
+        if not self.is_running:
+            return
+        self.is_running = False
+        if self.capture:
             try:
-                self.stop()
+                self.capture.stop()
             except Exception as e:
                 print(f"Error stopping DXGI capture: {e}")
-                
         self.capture = None
         with self.frame_lock:
             self.last_frame = None
-        self.is_running = False
         print("DXGI capture stopped.")
 
     def grab(self) -> Optional[FrameData]:
