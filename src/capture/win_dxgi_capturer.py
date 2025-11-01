@@ -15,13 +15,17 @@ class WinDXGICapturer(BaseCapturer):
         self.is_running: bool = False
         self.frame_lock: threading.Lock = threading.Lock()
         self.capture_thread: Optional[threading.Thread] = None
+        self.stop_event: threading.Event = threading.Event()
 
     def start(self) -> None:
         try:
             self.capture = WindowsCapture(window_name=self.target_window_title)
             
             @self.capture.event
-            def on_frame_arrived(frame: Frame, _: InternalCaptureControl):
+            def on_frame_arrived(frame: Frame, capture_control: InternalCaptureControl):
+                if self.stop_event.is_set():
+                    capture_control.stop()
+                    return
                 t_now = time.perf_counter()
                 
                 h = frame.height
@@ -64,11 +68,10 @@ class WinDXGICapturer(BaseCapturer):
         if not self.is_running:
             return
         self.is_running = False
-        if self.capture:
-            try:
-                self.capture.stop()
-            except Exception as e:
-                print(f"Error stopping DXGI capture: {e}")
+        if self.capture_thread and self.capture_thread.is_alive():
+            self.stop_event.set()
+            self.capture_thread.join(timeout=1.0)
+
         self.capture = None
         with self.frame_lock:
             self.last_frame = None
