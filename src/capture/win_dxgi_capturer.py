@@ -63,7 +63,7 @@ class WinDXGICapturer(BaseCapturer):
     def stop(self) -> None:
         if self.capture and self.is_running:
             try:
-                self.capture.stop()
+                self.stop()
             except Exception as e:
                 print(f"Error stopping DXGI capture: {e}")
                 

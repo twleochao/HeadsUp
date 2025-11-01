@@ -1,66 +1,86 @@
 import cv2
-import json
 import argparse
+import numpy as np
 from typing import List, Tuple, Dict, Any
 
 from src.capture.win_dxgi_capturer import WinDXGICapturer
 from src.capture.utils import list_windows
-from src.calib.roi_models import RoiProfile, BoardROIs, SeatROIs, DealerButtonROI, Rect
+from src.calib.roi_models import RoiProfile, Rect, PropRect, Point
 
-CARD_WIDTH = 80
-CARD_HEIGHT = 110
-CARD_OFFSET_X = 90 
-
-BOARD_GEOMETRY = {
-    "flop_1": (0, 0, CARD_WIDTH, CARD_HEIGHT),
-    "flop_2": (CARD_OFFSET_X, 0, CARD_WIDTH, CARD_HEIGHT),
-    "flop_3": (CARD_OFFSET_X * 2, 0, CARD_WIDTH, CARD_HEIGHT),
-    "turn": (CARD_OFFSET_X * 3.2, 0, CARD_WIDTH, CARD_HEIGHT), # Extra gap
-    "river": (CARD_OFFSET_X * 4.2, 0, CARD_WIDTH, CARD_HEIGHT),
-}
-
-POT_GEOMETRY = {
-    "pot": (0, 0, 150, 50)
-}
-
-SEAT_GEOMETRY = {
-    "bet": (0, -50, 100, 40),
-    "stack": (0, 100, 100, 40),
-    "cards": (-65, -10, 130, 90),
-    "name": (0, 150, 100, 40),
-}
-
-def make_rect_from_center(center_x: int, center_y: int, w: int, h: int) -> Rect:
-    """Helper to create an (x, y, w, h) rect from a center point."""
-    x = int(center_x - w / 2)
-    y = int(center_y - h / 2)
+def make_rect_from_clicks(pt1: Point, pt2: Point) -> Rect:
+    x = min(pt1[0], pt2[0])
+    y = min(pt1[1], pt2[1])
+    w = abs(pt1[0] - pt2[0])
+    h = abs(pt1[1] - pt2[1])
     return (x, y, w, h)
+
+def to_proportional(pixel_rect: Rect, master_rect: Rect) -> PropRect:
+    px, py, pw, ph = pixel_rect
+    mx, my, mw, mh = master_rect
+    
+    if mw == 0 or mh == 0:
+        return (0.0, 0.0, 0.0, 0.0)
+        
+    prx = (px - mx) / mw
+    pry = (py - my) / mh
+    prw = pw / mw
+    prh = ph / mh
+    return (prx, pry, prw, prh)
 
 class CalibrationWizard:
     def __init__(self, window_title: str):
         self.window_title = window_title
         self.capturer = WinDXGICapturer(target_window_title=window_title)
-        self.click_points: List[Tuple[int, int]] = []
-        self.current_step = 0
-        self.window_name = "Calibration Wizard - Click prompts in terminal"
-
+        
+        self.clicks: Dict[str, List[Point]] = {}
+        self.window_name = "Calibration Wizard"
+        self.font = cv2.FONT_HERSHEY_SIMPLEX
+        
         self.steps = [
-            "Click the CENTER of the FIRST FLOP card",
-            "Click the CENTER of the POT",           
-            "Click the CENTER of YOUR (Hero's) SEAT",
-            "Click the CENTER of the SEAT TO HERO'S RIGHT",
-            "Click the CENTER of the SEAT TO HERO'S LEFT",
-            "Click the CENTER of the DEALER BUTTON",     
+            ("master", 2, "Click TL/BR of the ENTIRE Game Area (black box)"),
+            ("board_area", 2, "Click TL/BR of the Full Board (Flop 1 to River)"),
+            ("pot", 2, "Click TL/BR of the Pot Area"),
+            ("hero_seat", 2, "Click TL/BR for HERO'S Seat Box"),
         ]
+        
+        self.current_step_index = 0
+        self.current_seat_index = 1
+        self.in_seat_loop = False
+
+    def _get_current_step(self) -> Tuple[str, int, str]:
+        if not self.in_seat_loop:
+            step_name, clicks, prompt = self.steps[self.current_step_index]
+            return step_name, clicks, prompt
+        else:
+            prompt = f"Click TL/BR for Seat {self.current_seat_index} (or 'n' to finish)"
+            step_name = f"seat_{self.current_seat_index}"
+            return step_name, 2, prompt
 
     def _mouse_callback(self, event: int, x: int, y: int, flags: int, param: Any):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            if self.current_step < len(self.steps):
-                print(f"  > Click recorded at ({x}, {y})")
-                self.click_points.append((x, y))
-                self.current_step += 1
+        if event != cv2.EVENT_LBUTTONDOWN:
+            return
+            
+        step_name, clicks_needed, _ = self._get_current_step()
+
+        if step_name not in self.clicks:
+            self.clicks[step_name] = []
+            
+        self.clicks[step_name].append((x, y))
+        print(f"  > Click {len(self.clicks[step_name])}/{clicks_needed} recorded for {step_name} at ({x}, {y})")
+
+        if len(self.clicks[step_name]) == clicks_needed:
+            print(f"  > Step '{step_name}' complete.")
+            
+            if self.in_seat_loop:
+                self.current_seat_index += 1
             else:
-                print("All steps complete!")
+                self.current_step_index += 1
+
+            if not self.in_seat_loop and self.current_step_index == len(self.steps):
+                self.in_seat_loop = True
+                print("\n--- Starting Seat Loop ---")
+                print("Calibrate all other seats, starting from Hero's LEFT and going CLOCKWISE.")
+                print("Press 'n' in the OpenCV window to finish calibration.\n")
 
     def run(self) -> None:
         try:
@@ -68,118 +88,92 @@ class CalibrationWizard:
                 cv2.namedWindow(self.window_name)
                 cv2.setMouseCallback(self.window_name, self._mouse_callback)
                 
-                print("Starting calibration wizard. Please click on the OpenCV window.")
+                print("Starting calibration wizard...")
                 
-                while self.current_step < len(self.steps):
+                while True:
                     frame_data = cap.grab()
                     if not frame_data:
                         continue
                     
                     frame = frame_data.frame
-                    
-                    prompt = self.steps[self.current_step]
-                    cv2.putText(frame, prompt, (50, 50), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-                    
-                    for i, (x, y) in enumerate(self.click_points):
-                        cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
-                        cv2.putText(frame, str(i), (x + 10, y + 10), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    step_name, clicks_needed, prompt = self._get_current_step()
+
+                    cv2.putText(frame, prompt, (50, 50), self.font, 1.0, (0, 255, 255), 2)
+                    if self.in_seat_loop:
+                        cv2.putText(frame, "Press 'n' to finish.", (50, 90), self.font, 0.7, (0, 255, 255), 2)
+
+                    for name, points in self.clicks.items():
+                        if len(points) == 2:
+                            rect = make_rect_from_clicks(points[0], points[1])
+                            color = (0, 255, 0) if name != 'master' else (0, 0, 255)
+                            cv2.rectangle(frame, (rect[0], rect[1]), (rect[0]+rect[2], rect[1]+rect[3]), color, 2)
 
                     cv2.imshow(self.window_name, frame)
                     
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
                         print("Calibration cancelled.")
                         return
-                
-                print("Calibration complete. Processing ROIs...")
-                self.process_rois()
+                    if key == ord('n') and self.in_seat_loop:
+                        print("Calibration complete. Processing ROIs...")
+                        self.process_rois(frame)
+                        break
 
         except (RuntimeError, FileNotFoundError) as e:
             print(f"Error: {e}")
         finally:
             cv2.destroyAllWindows()
 
-    def process_rois(self):
-        if len(self.click_points) != len(self.steps):
-            print("Error: Not enough click points. Aborting.")
-            return
-
-        board_anchor = self.click_points[0] 
-        pot_anchor = self.click_points[1]    
-        hero_anchor = self.click_points[2]
-        right_anchor = self.click_points[3]
-        left_anchor = self.click_points[4]
-        dealer_anchor = self.click_points[5]
-
-        board_rois = {}
-        for name, (dx, dy, w, h) in BOARD_GEOMETRY.items():
-            center_x = board_anchor[0] + dx
-            center_y = board_anchor[1] + dy
-            board_rois[name] = make_rect_from_center(center_x, center_y, w, h)
-        
-        pot_rect = make_rect_from_center(
-            pot_anchor[0] + POT_GEOMETRY["pot"][0],
-            pot_anchor[1] + POT_GEOMETRY["pot"][1],
-            POT_GEOMETRY["pot"][2],
-            POT_GEOMETRY["pot"][3]
-        )
-        board_rois["pot"] = pot_rect
-        
-        final_board = BoardROIs(**board_rois)
-
-        final_dealer = DealerButtonROI(
-            position_anchor=make_rect_from_center(dealer_anchor[0], dealer_anchor[1], 30, 30)
-        )
-
-        
-        seat_anchors = {
-            2: hero_anchor, 
-            3: right_anchor,
-            1: left_anchor,
-        }
-        
-        final_seats: Dict[int, SeatROIs] = {}
-        for seat_index, anchor in seat_anchors.items():
-            seat_data = {"is_hero": (seat_index == 2)}
-            for name, (dx, dy, w, h) in SEAT_GEOMETRY.items():
-                center_x = anchor[0] + dx
-                center_y = anchor[1] + dy
-                seat_data[name] = make_rect_from_center(center_x, center_y, w, h)
+    def process_rois(self, frame: np.ndarray):
+        """Derives all ROIs from the clicked anchor points."""
+        try:
+            master_rect = make_rect_from_clicks(self.clicks["master"][0], self.clicks["master"][1])
+            master_w, master_h = master_rect[2], master_rect[3]
             
-            seat_data["seat_anchor"] = make_rect_from_center(anchor[0], anchor[1], 100, 100)
-            final_seats[seat_index] = SeatROIs(**seat_data)
-
-        profile_name = f"pokernow_{self.capturer.width}x{self.capturer.height}"
-        resolution = (self.capturer.width, self.capturer.height)
-
-        profile = RoiProfile(
-            profile_name=profile_name,
-            resolution=resolution,
-            board=final_board,
-            dealer_button=final_dealer,
-            seats=final_seats
-        )
-        
-        save_path = "data/roi_profile.json"
-        # TODO: Ensure 'data/' directory exists
-        profile.save_json(save_path)
-        
-        print(f"Success! ROI profile saved to {save_path}")
-        print(profile.model_dump_json(indent=2))
-
+            board_rect = to_proportional(make_rect_from_clicks(self.clicks["board_area"][0], self.clicks["board_area"][1]), master_rect)
+            pot_rect = to_proportional(make_rect_from_clicks(self.clicks["pot"][0], self.clicks["pot"][1]), master_rect)
+            
+            seat_rects: Dict[int, PropRect] = {}
+            
+            seat_rects[0] = to_proportional(make_rect_from_clicks(self.clicks["hero_seat"][0], self.clicks["hero_seat"][1]), master_rect)
+            
+            for i in range(1, self.current_seat_index):
+                seat_key = f"seat_{i}"
+                if seat_key in self.clicks:
+                    seat_rects[i] = to_proportional(make_rect_from_clicks(self.clicks[seat_key][0], self.clicks[seat_key][1]), master_rect)
+            
+            profile_name = f"pokernow_{master_w}x{master_h}"
+            
+            profile = RoiProfile(
+                profile_name=profile_name,
+                master_resolution=(master_w, master_h),
+                board_rect=board_rect,
+                pot_rect=pot_rect,
+                seats_rects=seat_rects
+            )
+            
+            save_path = f"data/{profile_name}.json"
+            profile.save_json(save_path)
+            
+            print(f"Calibrated {len(seat_rects)} seats.")
+            
+        except KeyError as e:
+            print(f"Error: A calibration step was missed: {e}. Profile not saved.")
+        except Exception as e:
+            print(f"An unexpected error occurred during processing: {e}. Profile not saved.")
 
 def main():
     parser = argparse.ArgumentParser(description="ROI Calibration Wizard")
     parser.add_argument(
         "-t", "--title",
         type=str,
-        default=None,
-        help="Target window title. If not provided, a list will be shown."
+        default=None, # Default to PokerNow
+        help="Target window title. List of avaliable windows will be shown"
     )
     args = parser.parse_args()
-    
     title = args.title
+    windows = list_windows()
+
     if not title:
         print("No window title provided. Available windows:")
         windows = list_windows()
@@ -200,7 +194,8 @@ def main():
         except ValueError:
             print("Invalid input.")
             return
-            
+
+    print(f"Starting wizard for: '{title}'")
     wizard = CalibrationWizard(window_title=title)
     wizard.run()
 
