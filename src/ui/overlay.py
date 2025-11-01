@@ -22,6 +22,14 @@ class HudOverlay(QMainWindow):
         self.pot_label = QLabel("Pot: N/A")
         self.pot_label.setStyleSheet("color: white; font-size: 16px; padding: 10px;")
         self.layout.addWidget(self.pot_label)
+
+        self.board_label = QLabel("Board: ---")  # <-- NEW
+        self.board_label.setStyleSheet("color: white; font-size: 16px; padding: 5px 10px;")
+        self.layout.addWidget(self.board_label)
+
+        self.hero_cards_label = QLabel("Hero: ---")  # <-- NEW
+        self.hero_cards_label.setStyleSheet("color: #FFFF00; font-size: 16px; padding: 5px 10px;")
+        self.layout.addWidget(self.hero_cards_label)
         
         self.action_label = QLabel("Action: ---")
         self.action_label.setStyleSheet("color: #00FF00; font-size: 18px; font-weight: bold; padding: 10px;")
@@ -36,6 +44,16 @@ class HudOverlay(QMainWindow):
             self.pot_label.setText(f"Pot: {pot_str}")
         else:
             self.pot_label.setText("Pot: 0")
+
+    @Slot(str)
+    def update_board_display(self, board_str: str): 
+        """Public slot to update the board label."""
+        self.board_label.setText(f"Board: {board_str}")
+
+    @Slot(str)
+    def update_hero_cards_display(self, cards_str: str):
+        """Public slot to update the hero cards label."""
+        self.hero_cards_label.setText(f"Hero: {cards_str}")
 
     @Slot(str)
     def update_action_display(self, action_str: str):
