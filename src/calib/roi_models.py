@@ -2,11 +2,9 @@ import json
 from pydantic import BaseModel, Field
 from typing import Dict, Tuple, Optional
 
-# A simple (x, y, w, h) bounding box, matching OpenCV's convention
 Rect = Tuple[int, int, int, int]
 
 class SeatROIs(BaseModel):
-    """Defines all ROIs associated with a single player seat."""
     seat_anchor: Rect = Field(..., description="Main anchor for the seat, used for relative calcs")
     bet: Rect = Field(..., description="Area where the bet amount is displayed")
     stack: Rect = Field(..., description="Area where the stack size is displayed")
@@ -15,7 +13,6 @@ class SeatROIs(BaseModel):
     is_hero: bool = False
 
 class BoardROIs(BaseModel):
-    """Defines all ROIs for the community board and pot."""
     flop_1: Rect
     flop_2: Rect
     flop_3: Rect
@@ -24,24 +21,16 @@ class BoardROIs(BaseModel):
     pot: Rect
     
 class DealerButtonROI(BaseModel):
-    """Location of the dealer button, used to track position."""
     position_anchor: Rect
 
 class RoiProfile(BaseModel):
-    """
-    The complete ROI profile for a specific table layout/resolution.
-    This model is saved to and loaded from JSON.
-    """
     profile_name: str
     resolution: Tuple[int, int] = Field(..., description="Table window resolution (w, h)")
     board: BoardROIs
     dealer_button: DealerButtonROI
-    
-    # We will store seats in a dict mapping seat_index (0-5) to its ROI data
     seats: Dict[int, SeatROIs]
 
     def save_json(self, filepath: str) -> None:
-        """Saves the current ROI profile to a JSON file."""
         try:
             with open(filepath, 'w') as f:
                 json.dump(self.model_dump(), f, indent=2)
@@ -51,7 +40,6 @@ class RoiProfile(BaseModel):
 
     @classmethod
     def load_json(cls, filepath: str) -> 'RoiProfile':
-        """Loads an ROI profile from a JSON file."""
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)

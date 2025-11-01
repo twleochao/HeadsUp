@@ -45,13 +45,12 @@ class CalibrationWizard:
         self.window_name = "Calibration Wizard - Click prompts in terminal"
 
         self.steps = [
-            "Click the CENTER of the FIRST FLOP card",        # Anchor 0
-            "Click the CENTER of the POT",                    # Anchor 1
-            "Click the CENTER of YOUR (Hero's) SEAT",         # Anchor 2
-            "Click the CENTER of the SEAT TO HERO'S RIGHT",   # Anchor 3
-            "Click the CENTER of the SEAT TO HERO'S LEFT",    # Anchor 4
-            "Click the CENTER of the DEALER BUTTON",          # Anchor 5
-            # ... we can add more if needed
+            "Click the CENTER of the FIRST FLOP card",
+            "Click the CENTER of the POT",           
+            "Click the CENTER of YOUR (Hero's) SEAT",
+            "Click the CENTER of the SEAT TO HERO'S RIGHT",
+            "Click the CENTER of the SEAT TO HERO'S LEFT",
+            "Click the CENTER of the DEALER BUTTON",     
         ]
 
     def _mouse_callback(self, event: int, x: int, y: int, flags: int, param: Any):
@@ -78,12 +77,10 @@ class CalibrationWizard:
                     
                     frame = frame_data.frame
                     
-                    # Draw instructions
                     prompt = self.steps[self.current_step]
                     cv2.putText(frame, prompt, (50, 50), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
                     
-                    # Draw completed clicks
                     for i, (x, y) in enumerate(self.click_points):
                         cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
                         cv2.putText(frame, str(i), (x + 10, y + 10), 
@@ -104,23 +101,17 @@ class CalibrationWizard:
             cv2.destroyAllWindows()
 
     def process_rois(self):
-        """
-        Derives all ROIs from the clicked anchor points.
-        This is where the "self-calibrating" logic lives.
-        """
         if len(self.click_points) != len(self.steps):
             print("Error: Not enough click points. Aborting.")
             return
 
-        # --- 1. Extract Anchors ---
-        board_anchor = self.click_points[0]  # Flop-1
-        pot_anchor = self.click_points[1]    # Pot
+        board_anchor = self.click_points[0] 
+        pot_anchor = self.click_points[1]    
         hero_anchor = self.click_points[2]
         right_anchor = self.click_points[3]
         left_anchor = self.click_points[4]
         dealer_anchor = self.click_points[5]
 
-        # --- 2. Board & Pot ---
         board_rois = {}
         for name, (dx, dy, w, h) in BOARD_GEOMETRY.items():
             center_x = board_anchor[0] + dx
@@ -137,20 +128,15 @@ class CalibrationWizard:
         
         final_board = BoardROIs(**board_rois)
 
-        # --- 3. Dealer Button ---
         final_dealer = DealerButtonROI(
             position_anchor=make_rect_from_center(dealer_anchor[0], dealer_anchor[1], 30, 30)
         )
 
-        # --- 4. Seats ---
-        # This is a placeholder. A real 6-max table would need
-        # all 6 seats clicked or derived from the hero/left/right anchors.
-        # For now, we'll just save the 3 we clicked.
         
         seat_anchors = {
-            2: hero_anchor,  # Assuming Hero is Seat 2
-            3: right_anchor, # Seat 3
-            1: left_anchor,  # Seat 1
+            2: hero_anchor, 
+            3: right_anchor,
+            1: left_anchor,
         }
         
         final_seats: Dict[int, SeatROIs] = {}
@@ -161,11 +147,9 @@ class CalibrationWizard:
                 center_y = anchor[1] + dy
                 seat_data[name] = make_rect_from_center(center_x, center_y, w, h)
             
-            # The main anchor is the click point itself
             seat_data["seat_anchor"] = make_rect_from_center(anchor[0], anchor[1], 100, 100)
             final_seats[seat_index] = SeatROIs(**seat_data)
 
-        # --- 5. Create and Save Profile ---
         profile_name = f"pokernow_{self.capturer.width}x{self.capturer.height}"
         resolution = (self.capturer.width, self.capturer.height)
 

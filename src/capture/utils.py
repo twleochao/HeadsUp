@@ -19,24 +19,3 @@ def find_window_by_title(title):
         return hwnd if hwnd != 0 else None    
     except win32gui.error:
         return None
-
-if __name__ == '__main__':
-    all_windows = list_windows()
-    for i, (hwnd, title) in enumerate(all_windows.items()):
-        print(f" {i+1}: [{hwnd}] {title}")
-        if i > 20:
-            print("...")
-            break
-
-    test1= "Google Gemini - Google Chrome"
-    test2 = "gagaga"
-    hwnd1 = find_window_by_title(test1)
-    hwnd2 = find_window_by_title(test2)
-    if hwnd1:
-        print("success")
-    else:
-        print("fail")
-    if hwnd2:
-        print("success")
-    else:
-        print("fail")
