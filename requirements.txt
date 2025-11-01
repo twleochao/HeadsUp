@@ -1,9 +1,8 @@
-opencv-python-headless
-pytesseract
-mss
-pywin32
 PySide6
 numpy
 pydantic
 pytest
-windows-capture
+selenium
+pokernow
+pandas
+scikit-learn
