@@ -1,6 +1,6 @@
 from PySide6.QtCore import QObject, Slot, Signal
 from PokerNow.models import GameState, PlayerInfo, PlayerState
-from src.core.datatypes import Street
+from src.core.datatypes import Street, Position
 from src.api.models import PlayerData
 from typing import List
 
@@ -9,6 +9,7 @@ class AppStateManager(QObject):
     ui_board_updated = Signal(str)
     ui_hero_cards_updated = Signal(str)
     ui_turn_updated = Signal(str)
+    ui_hero_position_updated = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -18,6 +19,7 @@ class AppStateManager(QObject):
         self.hero: PlayerInfo = None
         self.processed_players: List[PlayerData] = []
         self.current_player_name: str = "N/A"
+        self.hero_position: Position = Position.UNKNOWN
         
     @Slot(object)
     def update_raw_game_state(self, raw_state: GameState):
@@ -42,7 +44,10 @@ class AppStateManager(QObject):
             self.processed_players = []            
             self.current_player_name = raw_state.current_player
 
-            for player in raw_state.players:
+            num_players = len(raw_state.players)
+            positions = self._calculate_positions(raw_state.dealer_position, num_players)
+
+            for i, player in enumerate(raw_state.players):
                 is_hero = False
                 if player.cards and 'Unknown' not in player.cards[0]:
                     is_hero = True
@@ -51,11 +56,13 @@ class AppStateManager(QObject):
                     name=player.name, 
                     stack=self._parse_stack_value(player.stack),
                     bet=self._parse_stack_value(player.bet_value),
-                    is_hero=is_hero
+                    is_hero=is_hero,
+                    position=positions[i]
                 )
                 self.processed_players.append(processed_player)
                 if is_hero:
                     self.hero = processed_player
+                    self.hero_position = processed_player.position
 
             self.ui_pot_updated.emit(str(self.pot_value))
             
@@ -69,8 +76,10 @@ class AppStateManager(QObject):
                     self.ui_hero_cards_updated.emit(hero_cards_str)
                 else:
                     self.ui_hero_cards_updated.emit("Error")
+                self.ui_hero_position_updated.emit(self.hero_position.name)
             else:
                 self.ui_hero_cards_updated.emit("Spectator")
+                self.ui_hero_position_updated.emit("N/A")
 
             self.ui_turn_updated.emit(self.current_player_name)
         
@@ -94,3 +103,25 @@ class AppStateManager(QObject):
             return float(stack_str)
         except ValueError:
             return 0.0
+
+    def _calculate_positions(self, dealer_pos_str: str, num_players: int) -> List[Position]:
+        positions = [Position.UNKNOWN] * num_players
+        if num_players < 2:
+            return positions
+
+        try:
+            dealer_idx = int(dealer_pos_str)
+        except (ValueError, TypeError):
+            return positions
+
+        if num_players == 2:
+            positions[dealer_idx] = Position.SB
+            positions[(dealer_idx + 1) % num_players] = Position.BB
+        else:
+            positions[dealer_idx] = Position.BTN
+            positions[(dealer_idx + 1) % num_players] = Position.SB
+            positions[(dealer_idx + 2) % num_players] = Position.BB
+            
+            # TODO: Add logic for UTG, MP, CO for 6-max, 9-max, etc.
+
+        return positions

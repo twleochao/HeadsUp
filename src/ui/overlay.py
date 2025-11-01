@@ -31,6 +31,10 @@ class HudOverlay(QMainWindow):
         self.hero_cards_label.setStyleSheet("color: #FFFF00; font-size: 16px; padding: 5px 10px;")
         self.layout.addWidget(self.hero_cards_label)
 
+        self.hero_pos_label = QLabel("Pos: ---")
+        self.hero_pos_label.setStyleSheet("color: #FFFF00; font-size: 16px; padding: 5px 10px;")
+        self.layout.addWidget(self.hero_pos_label)
+
         self.turn_label = QLabel("Turn: ---")
         self.turn_label.setStyleSheet("color: #FF8C00; font-size: 16px; padding: 5px 10px;")
         self.layout.addWidget(self.turn_label)
@@ -39,7 +43,7 @@ class HudOverlay(QMainWindow):
         self.action_label.setStyleSheet("color: #00FF00; font-size: 18px; font-weight: bold; padding: 10px;")
         self.layout.addWidget(self.action_label)
 
-        self.setGeometry(50, 50, 300, 240)
+        self.setGeometry(50, 50, 300, 280)
 
     @Slot(str)
     def update_pot_display(self, pot_str: str):
@@ -55,6 +59,10 @@ class HudOverlay(QMainWindow):
     @Slot(str)
     def update_hero_cards_display(self, cards_str: str):
         self.hero_cards_label.setText(f"Hero: {cards_str}")
+
+    @Slot(str)
+    def update_hero_position_display(self, pos_str: str):
+        self.hero_pos_label.setText(f"Pos: {pos_str}")
 
     @Slot(str)
     def update_turn_display(self, player_name: str):

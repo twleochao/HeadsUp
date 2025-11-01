@@ -30,6 +30,7 @@ poller_worker.game_state_updated.connect(state_manager.update_raw_game_state)
 state_manager.ui_pot_updated.connect(hud.update_pot_display)
 state_manager.ui_board_updated.connect(hud.update_board_display)
 state_manager.ui_hero_cards_updated.connect(hud.update_hero_cards_display)
+state_manager.ui_hero_position_updated.connect(hud.update_hero_position_display)
 state_manager.ui_turn_updated.connect(hud.update_turn_display)
 
 poller_thread.start()
