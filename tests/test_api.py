@@ -4,51 +4,52 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from PokerNow import PokerClient
 
-# --- CONFIGURATION ---
-# This tells Selenium to look for 'chromedriver.exe' in the *same folder*
-# as this script.
 DRIVER_PATH = os.path.join(os.getcwd(), "chromedriver.exe")
-# ---------------------
 
 try:
-    # 1. Set up the Selenium "service"
-    service = Service(executable_path=DRIVER_PATH)
-    driver = webdriver.Chrome(service=service)
+    if not os.path.exists(DRIVER_PATH):
+        print(f"Error: chromedriver.exe not found at {DRIVER_PATH}")
+        print("Please download the matching version for your Chrome browser and place it in the project root.")
+    else:
+        service = Service(executable_path=DRIVER_PATH)
+        driver = webdriver.Chrome(service=service)
+        client = PokerClient(driver, cookie_path='pokernow_cookies.pkl')
+        
+        print("\n" + "="*30)
+        game_link = input("Please paste a PokerNow spectator link to join: ")
+        print("="*30)
+        
+        if "pokernow.club/games/" not in game_link:
+            print("Invalid link. Must be a pokernow.club/games/...")
+        else:
+            client.navigate(game_link)
+            print("Successfully navigated to game. Waiting for game to load...")
+            time.sleep(5) # Give the page time to load
+            
+            print("\nFetching state every 3 seconds...")
+            print("Press Ctrl+C to stop.")
 
-    # 2. Start the PokerClient
-    client = PokerClient(driver)
-    
-    # 3. Open the game page
-    client.navigate('https://www.pokernow.club/start-game')
-    
-    print("\n" + "="*30)
-    print("ACTION REQUIRED:")
-    print("1. In the Chrome window, start a new game.")
-    print("2. Open the 'Invite' link in a new tab to join as a player.")
-    print("3. Start the game (you may need a 3rd player to join).")
-    print("="*30)
-    input("\nPress Enter here when you are sitting at the table and the game has started...")
-    
-    print("\nSuccessfully connected to game. Fetching state every 3 seconds...")
-    print("Press Ctrl+C to stop.")
-    
-    while True:
-        game_state = client.get_game_state()
-        
-        print("\n--- NEW GAME STATE ---")
-        print(f"Pot: {game_state.pot}")
-        print(f"Board: {[f'{c.rank}{c.suit}' for c in game_state.community_cards]}")
-        
-        for player in game_state.players_info:
-            if player.is_hero:
-                print(f"  > HERO: {player.name}")
-                print(f"    Cards: {[f'{c.rank}{c.suit}' for c in player.cards]}")
-                print(f"    Stack: {player.stack_value}")
-                print(f"    Bet: {player.bet_value}")
-        
-        print(f"Is it our turn? {client.is_your_turn()}")
-        
-        time.sleep(3)
+            game_state = client.game_state_manager.get_game_state()
+            
+            while True:
+                community_cards = game_state.get_community_cards()
+                players = game_state.get_players_info()
+                
+                print("\n--- NEW GAME STATE ---")
+                print(f"Board: {[f'{c.rank}{c.suit}' for c in community_cards]}")
+
+                for player in players:
+                    player_name = player.name or "Unknown"
+                    is_hero_str = "(HERO)" if player.is_hero else ""
+                    
+                    print(f"  > Player: {player_name.ljust(20)} {is_hero_str}")
+                    print(f"    Cards: {[f'{c.rank}{c.suit}' for c in player.cards]}")
+                    print(f"    Stack: {player.stack_value}")
+                    print(f"    Bet:   {player.bet_value}")
+
+                print(f"Is it our turn? {game_state.is_your_turn()}")
+                
+                time.sleep(3)
 
 except Exception as e:
     print(f"\nAn error occurred: {e}")
