@@ -3,11 +3,11 @@ from PySide6.QtCore import QObject, Signal, Slot
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from PokerNow import PokerClient
+from PokerNow.models import GameState
 
 class PokerPoller(QObject):
     game_pot_updated = Signal(str) 
-
-    # game_state_updated = Signal(object)
+    game_state_updated = Signal(object)
     
     def __init__(self, game_url: str):
         super().__init__()
@@ -37,8 +37,7 @@ class PokerPoller(QObject):
                 try:
                     state = self.client.game_state_manager.get_game_state()
                     self.game_pot_updated.emit(state.pot_size)
-                    
-                    # self.game_state_updated.emit(state)
+                    self.game_state_updated.emit(state)
 
                 except Exception as e:
                     print(f"Error fetching game state: {e}")
