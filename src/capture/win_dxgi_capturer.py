@@ -37,7 +37,7 @@ class WinDXGICapturer(BaseCapturer):
 
                 with self.frame_lock:
                     if self.height != h or self.width != w:
-                        if self.height == 0: # First frame
+                        if self.height == 0:
                             print(f"DXGI capture started for '{self.target_window_title}' ({w}x{h})")
                         else:
                             print(f"Window resized to: {w}x{h}")
