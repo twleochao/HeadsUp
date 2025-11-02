@@ -6,7 +6,7 @@ from src.services.polling_service import PokerPoller
 from src.core.state_manager import AppStateManager
 
 POKER_NOW_GAME_URL = "https://www.pokernow.club/games/..." 
-POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pglExxElUxg_8m7WKWJ7ORl8C"
+POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pgljzvLjahwqusjHvnzEPiAn4"
 
 if POKER_NOW_GAME_URL == "https://www.pokernow.club/games/...":
     print("="*50)

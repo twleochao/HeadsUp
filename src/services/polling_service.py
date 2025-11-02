@@ -33,6 +33,8 @@ class PokerPoller(QObject):
             input("\nPress Enter in this console *after* you are sitting at the table...")
             print("--- Polling started. (Press Ctrl+C in console to quit) ---")
 
+            self.client.cookie_manager.save_cookies()
+
             while self._is_running:
                 try:
                     state = self.client.game_state_manager.get_game_state()

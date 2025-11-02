@@ -2,7 +2,26 @@ import os
 import json
 from src.core.datatypes import Position
 
-STUB_RFI_CHARTS = {}
+STUB_RFI_CHARTS = {
+    "BTN": {
+        "AA": "RAISE 3bb", "KK": "RAISE 3bb", "QQ": "RAISE 3bb", "JJ": "RAISE 3bb",
+        "AKs": "RAISE 3bb", "AQs": "RAISE 3bb", "AJs": "RAISE 3bb", "ATs": "RAISE 3bb",
+        "KQs": "RAISE 3bb", "KJs": "RAISE 3bb", "KTs": "RAISE 3bb",
+        "AKo": "RAISE 3bb", "AQo": "RAISE 3bb",
+        "72o": "FOLD", "83o": "FOLD", "T4s": "FOLD"
+    },
+    "SB": {
+        "AA": "RAISE 3bb", "KK": "RAISE 3bb", "QQ": "RAISE 3bb", "JJ": "RAISE 3bb",
+        "T9s": "RAISE 3bb", "98s": "RAISE 3bb", "87s": "RAISE 3bb", "76s": "RAISE 3bb",
+        "AKs": "RAISE 3bb", "AQs": "RAISE 3bb", "AJs": "RAISE 3bb", "ATs": "RAISE 3bb",
+        "AKo": "RAISE 3bb", "AQo": "RAISE 3bb", "AJo": "RAISE 3bb",
+        "72o": "FOLD", "83o": "FOLD"
+    },
+    "BB": {
+        "AA": "3-BET 4x", "KK": "3-BET 4x", "QQ": "3-BET 4x",
+        "72o": "CHECK/FOLD"
+    }
+}
 
 class PreflopSolver:
     def __init__(self, chart_path: str = None):

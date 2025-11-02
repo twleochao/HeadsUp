@@ -15,20 +15,40 @@ class AppStateManager(QObject):
 
     def __init__(self):
         super().__init__()
+        self.preflop_solver = PreflopSolver()
+        self.reset_state()
+
+    def reset_state(self):
         self.current_street: Street = Street.PREFLOP
         self.pot_value: float = 0.0
         self.community_cards: List[str] = []
-        self.hero: PlayerInfo = None
+        self.hero: PlayerData = None
         self.processed_players: List[PlayerData] = []
         self.current_player_name: str = "N/A"
         self.hero_position: Position = Position.UNKNOWN
-        self.preflop_solver = PreflopSolver()
         
     @Slot(object)
     def update_raw_game_state(self, raw_state: GameState):
         try:
+            new_pot = self._parse_stack_value(raw_state.pot_size)
+            if new_pot == 0 and self.pot_value > 0:
+                self.reset_state()
+                self.ui_pot_updated.emit("0")
+                self.ui_board_updated.emit("---")
+                self.ui_action_updated.emit("---")
+                self.ui_hero_cards_updated.emit("---")
+                self.ui_hero_position_updated.emit("---")
+            self.pot_value = new_pot
+
+            if raw_state.winners:
+                self.current_street = Street.SHOWDOWN
+                board_str = ", ".join([str(card) for card in raw_state.community_cards])
+                self.ui_board_updated.emit(board_str)
+                self.ui_pot_updated.emit(str(self.pot_value))
+                self.ui_action_updated.emit("---")
+                return
+
             self.community_cards = [str(card) for card in raw_state.community_cards]
-            
             num_cards = len(self.community_cards)
             if num_cards == 0:
                 self.current_street = Street.PREFLOP
@@ -50,40 +70,46 @@ class AppStateManager(QObject):
             num_players = len(raw_state.players)
             positions = self._calculate_positions(raw_state.dealer_position, num_players)
 
-            for i, player in enumerate(raw_state.players):
-                is_hero = False
-                if player.cards and 'Unknown' not in player.cards[0]:
-                    is_hero = True
-                    raw_hero_card_list = player.cards
-                    
-                processed_player = PlayerData(
-                    name=player.name, 
-                    stack=self._parse_stack_value(player.stack),
-                    bet=self._parse_stack_value(player.bet_value),
-                    is_hero=is_hero,
-                    position=positions[i]
-                )
-                self.processed_players.append(processed_player)
-                if is_hero:
-                    self.hero = processed_player
-                    self.hero_position = processed_player.position
+            raw_hero_card_list = []
+            if not self.hero:
+                self.processed_players = []
+                self.current_player_name = raw_state.current_player
+                num_players = len(raw_state.players)
+                positions = self._calculate_positions(raw_state.dealer_position, num_players)
 
-            if self.current_street == Street.PREFLOP:
-                if self.hero and self.hero.name == self.current_player_name:
-                    action = self.preflop_solver.get_preflop_action(
-                        self.hero_position,
-                        raw_hero_card_list
+
+                for i, player in enumerate(raw_state.players):
+                    is_hero = False
+                    if player.cards and 'Unknown' not in player.cards[0]:
+                        is_hero = True
+                        raw_hero_card_list = player.cards
+                        
+                    processed_player = PlayerData(
+                        name=player.name, 
+                        stack=self._parse_stack_value(player.stack),
+                        bet=self._parse_stack_value(player.bet_value),
+                        is_hero=is_hero,
+                        position=positions[i]
                     )
-                    self.ui_action_updated.emit(action)
+                    self.processed_players.append(processed_player)
+                    if is_hero:
+                        self.hero = processed_player
+                        self.hero_position = processed_player.position
+            else:
+                raw_hero = next((p for p in raw_state.players if p.name == self.hero_name), None)
+                if raw_hero:
+                    raw_hero_card_list = raw_hero.cards
+            self.current_player_name = raw_state.current_player
+
+            action_to_show = "---"
+            if self.hero and self.hero.name == self.current_player_name:
+                if self.current_street == Street.PREFLOP:
+                    action_to_show = self.preflop_solver.get_preflop_action(
+                        self.hero_position,
+                        raw_hero_card_list)
                 else:
-                    self.ui_action_updated.emit("---")
-            elif self.current_street in [Street.FLOP, Street.TURN, Street.RIVER]:
-                # TODO: Postflop solver
-                if self.hero and self.hero.name == self.current_player_name:
-                    self.ui_action_updated.emit("POSTFLOP (TBD)")
-                else:
-                    self.ui_action_updated.emit("---")
-                
+                    action_to_show = "POSTFLOP (TBD)"
+            self.ui_action_updated.emit(action_to_show)
 
             self.ui_pot_updated.emit(str(self.pot_value))
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
@@ -126,22 +152,53 @@ class AppStateManager(QObject):
 
     def _calculate_positions(self, dealer_pos_str: str, num_players: int) -> List[Position]:
         positions = [Position.UNKNOWN] * num_players
-        if num_players < 2:
-            return positions
-
         try:
             dealer_idx = int(dealer_pos_str)
         except (ValueError, TypeError):
             return positions
 
+        if num_players < 2:
+            return positions
+
         if num_players == 2:
             positions[dealer_idx] = Position.SB
             positions[(dealer_idx + 1) % num_players] = Position.BB
+        elif num_players == 3:
+            positions[dealer_idx] = Position.BTN
+            positions[(dealer_idx + 1) % num_players] = Position.SB
+            positions[(dealer_idx + 2) % num_players] = Position.BB
+        elif num_players == 4:
+            positions[dealer_idx] = Position.BTN
+            positions[(dealer_idx + 1) % num_players] = Position.SB
+            positions[(dealer_idx + 2) % num_players] = Position.BB
+            positions[(dealer_idx + 3) % num_players] = Position.CO
+        elif num_players == 5:
+            positions[dealer_idx] = Position.BTN
+            positions[(dealer_idx + 1) % num_players] = Position.SB
+            positions[(dealer_idx + 2) % num_players] = Position.BB
+            positions[(dealer_idx + 3) % num_players] = Position.MP
+            positions[(dealer_idx + 4) % num_players] = Position.CO
+        elif num_players == 6:
+            positions[dealer_idx] = Position.BTN
+            positions[(dealer_idx + 1) % num_players] = Position.SB
+            positions[(dealer_idx + 2) % num_players] = Position.BB
+            positions[(dealer_idx + 3) % num_players] = Position.UTG
+            positions[(dealer_idx + 4) % num_players] = Position.MP
+            positions[(dealer_idx + 5) % num_players] = Position.CO
         else:
             positions[dealer_idx] = Position.BTN
             positions[(dealer_idx + 1) % num_players] = Position.SB
             positions[(dealer_idx + 2) % num_players] = Position.BB
             
-            # TODO: Add logic for UTG, MP, CO for 6-max, 9-max, etc.
+            pos_names = [Position.UTG, Position.MP, Position.CO]
+            if num_players == 8:
+                pos_names = [Position.UTG, Position.UTG, Position.MP, Position.CO]
+            elif num_players == 9:
+                pos_names = [Position.UTG, Position.UTG, Position.MP, Position.MP, Position.CO]
+            elif num_players == 10:
+                pos_names = [Position.UTG, Position.UTG, Position.UTG, Position.MP, Position.MP, Position.CO]
 
+            for i in range(3, num_players - 1):
+                positions[(dealer_idx + i) % num_players] = pos_names[i-3]
+        
         return positions
