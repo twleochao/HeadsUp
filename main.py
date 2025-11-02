@@ -6,7 +6,7 @@ from src.services.polling_service import PokerPoller
 from src.core.state_manager import AppStateManager
 
 POKER_NOW_GAME_URL = "https://www.pokernow.club/games/..." 
-POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pglsraz1lWEkWSLnk1tDwVf6o"
+POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pglExxElUxg_8m7WKWJ7ORl8C"
 
 if POKER_NOW_GAME_URL == "https://www.pokernow.club/games/...":
     print("="*50)
@@ -32,6 +32,7 @@ state_manager.ui_board_updated.connect(hud.update_board_display)
 state_manager.ui_hero_cards_updated.connect(hud.update_hero_cards_display)
 state_manager.ui_hero_position_updated.connect(hud.update_hero_position_display)
 state_manager.ui_turn_updated.connect(hud.update_turn_display)
+state_manager.ui_action_updated.connect(hud.update_action_display)
 
 poller_thread.start()
 

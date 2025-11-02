@@ -2,14 +2,16 @@ from PySide6.QtCore import QObject, Slot, Signal
 from PokerNow.models import GameState, PlayerInfo, PlayerState
 from src.core.datatypes import Street, Position
 from src.api.models import PlayerData
+from src.logic.preflop_solver import PreflopSolver
 from typing import List
 
 class AppStateManager(QObject):
     ui_pot_updated = Signal(str)
     ui_board_updated = Signal(str)
     ui_hero_cards_updated = Signal(str)
-    ui_turn_updated = Signal(str)
     ui_hero_position_updated = Signal(str)
+    ui_turn_updated = Signal(str)
+    ui_action_updated = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -20,6 +22,7 @@ class AppStateManager(QObject):
         self.processed_players: List[PlayerData] = []
         self.current_player_name: str = "N/A"
         self.hero_position: Position = Position.UNKNOWN
+        self.preflop_solver = PreflopSolver()
         
     @Slot(object)
     def update_raw_game_state(self, raw_state: GameState):
@@ -51,6 +54,7 @@ class AppStateManager(QObject):
                 is_hero = False
                 if player.cards and 'Unknown' not in player.cards[0]:
                     is_hero = True
+                    raw_hero_card_list = player.cards
                     
                 processed_player = PlayerData(
                     name=player.name, 
@@ -64,8 +68,24 @@ class AppStateManager(QObject):
                     self.hero = processed_player
                     self.hero_position = processed_player.position
 
+            if self.current_street == Street.PREFLOP:
+                if self.hero and self.hero.name == self.current_player_name:
+                    action = self.preflop_solver.get_preflop_action(
+                        self.hero_position,
+                        raw_hero_card_list
+                    )
+                    self.ui_action_updated.emit(action)
+                else:
+                    self.ui_action_updated.emit("---")
+            elif self.current_street in [Street.FLOP, Street.TURN, Street.RIVER]:
+                # TODO: Postflop solver
+                if self.hero and self.hero.name == self.current_player_name:
+                    self.ui_action_updated.emit("POSTFLOP (TBD)")
+                else:
+                    self.ui_action_updated.emit("---")
+                
+
             self.ui_pot_updated.emit(str(self.pot_value))
-            
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
             self.ui_board_updated.emit(board_str)
             
