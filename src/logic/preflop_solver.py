@@ -25,11 +25,6 @@ STUB_RFI_CHARTS = {
 
 class PreflopSolver:
     def __init__(self, chart_path: str = None):
-        """
-        Initializes the solver.
-        If chart_path is provided, loads charts from disk.
-        Otherwise, uses the stub charts.
-        """
         if chart_path:
             # TODO: Add logic to load charts from 'data/charts/'
             print("Chart loading not yet implemented. Using stubs.")
@@ -66,12 +61,6 @@ class PreflopSolver:
             return f"{r1}{r2}o"
 
     def get_preflop_action(self, position: Position, raw_hero_cards: list[str]) -> str:
-        """
-        The main lookup function.
-        
-        TODO: This is a simple RFI (Raise First In) lookup.
-        We will need to expand this to handle "vs 3-bet", "vs open", etc.
-        """
         if not raw_hero_cards or position == Position.UNKNOWN:
             return "---"
             

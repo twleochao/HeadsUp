@@ -3,7 +3,7 @@ from PokerNow.models import GameState, PlayerInfo, PlayerState
 from src.core.datatypes import Street, Position
 from src.api.models import PlayerData
 from src.logic.preflop_solver import PreflopSolver
-from typing import List
+from typing import List, Dict
 
 class AppStateManager(QObject):
     ui_pot_updated = Signal(str)
@@ -23,31 +23,69 @@ class AppStateManager(QObject):
         self.pot_value: float = 0.0
         self.community_cards: List[str] = []
         self.hero: PlayerData = None
-        self.processed_players: List[PlayerData] = []
         self.current_player_name: str = "N/A"
         self.hero_position: Position = Position.UNKNOWN
+
+        self.hand_in_progress: bool = False
+        self.hero_cards_str: str = "---"
+        self.player_positions: Dict[str, Position] = {}
+
+        self.ui_pot_updated.emit("0")
+        self.ui_board_updated.emit("---")
+        self.ui_action_updated.emit("---")
+        self.ui_hero_cards_updated.emit("---")
+        self.ui_hero_position_updated.emit("---")
         
     @Slot(object)
     def update_raw_game_state(self, raw_state: GameState):
         try:
-            new_pot = self._parse_stack_value(raw_state.pot_size)
-            if new_pot == 0 and self.pot_value > 0:
-                self.reset_state()
-                self.ui_pot_updated.emit("0")
-                self.ui_board_updated.emit("---")
-                self.ui_action_updated.emit("---")
-                self.ui_hero_cards_updated.emit("---")
-                self.ui_hero_position_updated.emit("---")
-            self.pot_value = new_pot
-
-            if raw_state.winners:
+            if raw_state.winners and self.hand_in_progress:
+                self.hand_in_progress = False
                 self.current_street = Street.SHOWDOWN
                 board_str = ", ".join([str(card) for card in raw_state.community_cards])
                 self.ui_board_updated.emit(board_str)
-                self.ui_pot_updated.emit(str(self.pot_value))
+                self.ui_pot_updated.emit(str(self._parse_stack_value(raw_state.pot_size)))
                 self.ui_action_updated.emit("---")
                 return
 
+            if not self.hand_in_progress and not raw_state.winners and not raw_state.community_cards:
+                if not raw_state.players or not raw_state.players[0].cards:
+                    return
+
+                self.hand_in_progress = True
+
+                num_players = len(raw_state.players)
+                positions = self._calculate_positions(raw_state.dealer_position, num_players)
+                self.player_positions = {}
+
+                for i, player in enumerate(raw_state.players):
+                    if player.name:
+                        self.player_positions[player.name] = positions[i]
+
+                    if player.cards and 'Unknown' not in player.cards[0]:
+                        self.hero = PlayerData(
+                            name=player.name,
+                            stack=self._parse_stack_value(player.stack),
+                            bet=self._parse_stack_value(player.bet_value),
+                            is_hero=True,
+                            position=positions[i]
+                        )
+                        self.hero_position = positions[i]
+                        self.hero_cards_str = ", ".join(player.cards)
+
+                if self.hero:
+                    self.ui_hero_cards_updated.emit(self.hero_cards_str)
+                    self.ui_hero_position_updated.emit(self.hero_position.name)
+                else:
+                    self.ui_hero_cards_updated.emit("Spectator")
+                    self.ui_hero_position_updated.emit("N/A")
+            
+
+            if not self.hand_in_progress: 
+                return
+
+            self.pot_value = self._parse_stack_value(raw_state.pot_size)
+            self.current_player_name = raw_state.current_player
             self.community_cards = [str(card) for card in raw_state.community_cards]
             num_cards = len(self.community_cards)
             if num_cards == 0:
@@ -59,54 +97,11 @@ class AppStateManager(QObject):
             elif num_cards == 5:
                 self.current_street = Street.RIVER
             
-            # 2. Parse Pot
-            self.pot_value = self._parse_stack_value(raw_state.pot_size)
-            
-            # 3. Parse Player Info and Find Hero
-            self.hero = None
-            self.processed_players = []            
-            self.current_player_name = raw_state.current_player
-
-            num_players = len(raw_state.players)
-            positions = self._calculate_positions(raw_state.dealer_position, num_players)
-
-            raw_hero_card_list = []
-            if not self.hero:
-                self.processed_players = []
-                self.current_player_name = raw_state.current_player
-                num_players = len(raw_state.players)
-                positions = self._calculate_positions(raw_state.dealer_position, num_players)
-
-
-                for i, player in enumerate(raw_state.players):
-                    is_hero = False
-                    if player.cards and 'Unknown' not in player.cards[0]:
-                        is_hero = True
-                        raw_hero_card_list = player.cards
-                        
-                    processed_player = PlayerData(
-                        name=player.name, 
-                        stack=self._parse_stack_value(player.stack),
-                        bet=self._parse_stack_value(player.bet_value),
-                        is_hero=is_hero,
-                        position=positions[i]
-                    )
-                    self.processed_players.append(processed_player)
-                    if is_hero:
-                        self.hero = processed_player
-                        self.hero_position = processed_player.position
-            else:
-                raw_hero = next((p for p in raw_state.players if p.name == self.hero_name), None)
-                if raw_hero:
-                    raw_hero_card_list = raw_hero.cards
-            self.current_player_name = raw_state.current_player
 
             action_to_show = "---"
             if self.hero and self.hero.name == self.current_player_name:
                 if self.current_street == Street.PREFLOP:
-                    action_to_show = self.preflop_solver.get_preflop_action(
-                        self.hero_position,
-                        raw_hero_card_list)
+                    action_to_show = self.preflop_solver.get_preflop_action(self.hero_position, self.hero_cards_str.split(', '))
                 else:
                     action_to_show = "POSTFLOP (TBD)"
             self.ui_action_updated.emit(action_to_show)
@@ -114,31 +109,17 @@ class AppStateManager(QObject):
             self.ui_pot_updated.emit(str(self.pot_value))
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
             self.ui_board_updated.emit(board_str)
-            
-            if self.hero:
-                raw_hero = next((p for p in raw_state.players if p.name == self.hero.name), None)
-                if raw_hero:
-                    hero_cards_str = ", ".join(raw_hero.cards)
-                    self.ui_hero_cards_updated.emit(hero_cards_str)
-                else:
-                    self.ui_hero_cards_updated.emit("Error")
-                self.ui_hero_position_updated.emit(self.hero_position.name)
-            else:
-                self.ui_hero_cards_updated.emit("Spectator")
-                self.ui_hero_position_updated.emit("N/A")
-
             self.ui_turn_updated.emit(self.current_player_name)
-        
-        except Exception as e:
-            print(f"CRITICAL ERROR in AppStateManager: {e}")
-            print(f"Problematic raw_state: {raw_state}")
 
+        except Exception as e:
+            print(f"ERROR: {e}")
+            print(f"raw_state: {raw_state}")
 
     def _parse_stack_value(self, stack_str: str) -> float:
-        if not stack_str:
+        if not stack_str or "all in" in stack_str.lower():
             return 0.0
         
-        stack_str = stack_str.strip().upper()
+        stack_str = stack_str.strip().upper().split('(')[0]
         
         if 'K' in stack_str:
             return float(stack_str.replace('K', '')) * 1000
@@ -157,7 +138,7 @@ class AppStateManager(QObject):
         except (ValueError, TypeError):
             return positions
 
-        if num_players < 2:
+        if num_players < 2 or dealer_idx >= num_players or dealer_idx < 0:
             return positions
 
         if num_players == 2:
