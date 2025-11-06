@@ -17,7 +17,7 @@ class DataLogger(QObject):
     def _init_csv(self):
         header = [
             "timestamp", "hand_id", "street", "hero_cards", "hero_pos",
-            "board_cards", "pot_value", "hero_action", "gto_action"
+            "board_cards", "pot_value", "hero_action", "hero_action_amount", "gto_action", "gto_action_amount"
         ]
         with open(self.log_file, 'w', newline='') as f:
             writer = csv.writer(f)
@@ -36,7 +36,9 @@ class DataLogger(QObject):
                 data.get("board_cards", "N/A"),
                 data.get("pot_value", 0),
                 data.get("hero_action", "N/A"),
-                data.get("gto_action", "N/A")
+                data.get("hero_action_amount", 0.0),
+                data.get("gto_action", "N/A"),
+                data.get("gto_action_amount", 0.0)
             ]
             with open(self.log_file, 'a', newline='') as f:
                 writer = csv.writer(f)

@@ -7,7 +7,7 @@ from src.core.state_manager import AppStateManager
 from src.services.data_logger import DataLogger
 
 POKER_NOW_GAME_URL = "https://www.pokernow.club/games/..." 
-POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pgllx7BP9RQVN1oybzx_mRhNq"
+POKER_NOW_GAME_URL = "https://www.pokernow.club/games/pglCxvhJooXozSuH_-tj-8Qfm"
 
 if POKER_NOW_GAME_URL == "https://www.pokernow.club/games/...":
     print("="*50)

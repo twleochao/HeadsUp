@@ -34,6 +34,13 @@ class AppStateManager(QObject):
         self.hero_cards_str: str = "---"
         self.player_positions: Dict[str, Position] = {}
 
+        self.is_awaiting_hero_action: bool = False
+        self.previous_hero_bet: float = 0.0
+        self.current_bet_to_call: float = 0.0
+        self.previous_pot_value: float = 0.0
+        self.gto_action_to_log: dict = {}
+        self.hand_id = str(uuid.uuid4())
+
         self.ui_pot_updated.emit("0")
         self.ui_board_updated.emit("---")
         self.ui_action_updated.emit("---")
@@ -88,6 +95,13 @@ class AppStateManager(QObject):
             if not self.hand_in_progress: 
                 return
 
+            max_bet = 0.0
+            for p in raw_state.players:
+                bet_val = self._parse_stack_value(p.bet_value)
+                if bet_val > max_bet:
+                    max_bet = bet_val
+            self.current_bet_to_call = max_bet 
+
             self.pot_value = self._parse_stack_value(raw_state.pot_size)
             self.current_player_name = raw_state.current_player
             self.community_cards = [str(card) for card in raw_state.community_cards]
@@ -100,28 +114,89 @@ class AppStateManager(QObject):
                 self.current_street = Street.TURN
             elif num_cards == 5:
                 self.current_street = Street.RIVER
-            
 
-            action_to_show = "---"
             if self.hero and self.hero.name == self.current_player_name:
-                if self.current_street == Street.PREFLOP:
-                    action_to_show = self.preflop_solver.get_preflop_action(self.hero_position, self.hero_cards_str.split(', '))
-                else:
-                    action_to_show = "POSTFLOP (TBD)"
+                if not self.is_awaiting_hero_action:
+                    print(f"bet to call : {self.current_bet_to_call}")
+                    self.is_awaiting_hero_action = True
 
-            log_data = {
-                "hand_id": self.hand_id,
-                "street": self.current_street.name,
-                "hero_cards": self.hero_cards_str,
-                "hero_pos": self.hero_position.name,
-                "board_cards": ", ".join(self.community_cards) if self.community_cards else "",
-                "pot_value": self.pot_value,
-                "hero_action": "UNKNOWN", # <-- TODO: Get this from the API
-                "gto_action": action_to_show
-            }
+                    hero_raw = next((p for p in raw_state.players if p.name == self.hero.name), None)
+                    self.previous_hero_bet = self._parse_stack_value(hero_raw.bet_value) if hero_raw else 0.0
+                    self.previous_pot_value = self.pot_value
 
-            self.log_decision_made.emit(log_data)
-            self.ui_action_updated.emit(action_to_show)
+                    if self.current_street == Street.PREFLOP:
+                        self.gto_action_to_log = self.preflop_solver.get_preflop_action(
+                            self.hero_position,
+                            self.hero_cards_str.split(', ')
+                        )
+                    else:
+                        self.gto_action_to_log = {"action": "POSTFLOP (TBD)", "amount_str": ""}
+                
+                action_to_show = f"{self.gto_action_to_log.get('action', '---')} {self.gto_action_to_log.get('amount_str', '')}"
+                self.ui_action_updated.emit(action_to_show.strip())
+
+            elif self.hero and self.is_awaiting_hero_action:
+                print("Hero has acted. Detecting action...")
+                self.is_awaiting_hero_action = False
+                
+                hero_raw = next((p for p in raw_state.players if p.name == self.hero.name), None)
+                hero_action = "UNKNOWN"
+                hero_action_amount = 0.0
+                
+                if hero_raw:
+                    new_bet = self._parse_stack_value(hero_raw.bet_value)
+                    
+                    if hero_raw.status == PlayerState.FOLDED:
+                        hero_action = "FOLD"
+                    elif new_bet == self.previous_hero_bet:
+                        hero_action = "CHECK"
+                    elif new_bet == self.current_bet_to_call:
+                        hero_action = "CALL"
+                        hero_action_amount = new_bet - self.previous_hero_bet
+                    elif new_bet > self.current_bet_to_call:
+                        hero_action = "BET" if self.current_bet_to_call == 0 else "RAISE"
+                        hero_action_amount = new_bet - self.previous_hero_bet
+                
+                print(f"action: {hero_action} {hero_action_amount}")
+
+                log_data = {
+                    "hand_id": self.hand_id,
+                    "street": self.current_street.name,
+                    "hero_cards": self.hero_cards_str,
+                    "hero_pos": self.hero_position.name,
+                    "board_cards": ", ".join(self.community_cards) if self.community_cards else "",
+                    "pot_value": self.previous_pot_value,
+                    "hero_action": hero_action,
+                    "hero_action_amount": hero_action_amount,
+                    "gto_action": self.gto_action_to_log.get('action'),
+                    "gto_action_amount": self.gto_action_to_log.get('amount_str')
+                }
+                self.log_decision_made.emit(log_data)
+                self.ui_action_updated.emit("---")
+
+            elif not self.is_awaiting_hero_action:
+                self.ui_action_updated.emit("---")
+
+#            action_to_show = "---"
+#            if self.hero and self.hero.name == self.current_player_name:
+#                if self.current_street == Street.PREFLOP:
+#                    action_to_show = self.preflop_solver.get_preflop_action(self.hero_position, self.hero_cards_str.split(', '))
+#                else:
+#                    action_to_show = "POSTFLOP (TBD)"
+#
+#            log_data = {
+#                "hand_id": self.hand_id,
+#                "street": self.current_street.name,
+#                "hero_cards": self.hero_cards_str,
+#                "hero_pos": self.hero_position.name,
+#                "board_cards": ", ".join(self.community_cards) if self.community_cards else "",
+#                "pot_value": self.pot_value,
+#                "hero_action": "UNKNOWN", # <-- TODO: Get this from the API
+#                "gto_action": action_to_show
+#            }
+#
+#            self.log_decision_made.emit(log_data)
+#            self.ui_action_updated.emit(action_to_show)
             self.ui_pot_updated.emit(str(self.pot_value))
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
             self.ui_board_updated.emit(board_str)

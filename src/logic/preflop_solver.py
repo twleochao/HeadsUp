@@ -61,14 +61,21 @@ class PreflopSolver:
             return f"{r1}{r2}o"
 
     def get_preflop_action(self, position: Position, raw_hero_cards: list[str]) -> str:
+        default_action = {"action": "FOLD", "amount_str": ""}
+
         if not raw_hero_cards or position == Position.UNKNOWN:
-            return "---"
+            return default_action
             
         hand = self._format_hand(raw_hero_cards)
         pos_name = position.name
 
         if pos_name not in self.charts:
-            return f"No chart for {pos_name}"
+            return {"action": "", "amount_str": f"No action for {pos_name}"}
+
+        action_str = self.charts[pos_name].get(hand, "FOLD")
             
-        action = self.charts[pos_name].get(hand, "FOLD")
-        return action
+        parts = action_str.split(' ')
+        action = parts[0]
+        amount_str = parts[1] if len(parts) > 1 else ""
+
+        return {"action": action, "amount_str": amount_str}
