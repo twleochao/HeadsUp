@@ -4,6 +4,7 @@ from src.core.datatypes import Street, Position
 from src.api.models import PlayerData
 from src.logic.preflop_solver import PreflopSolver
 from typing import List, Dict
+import uuid
 
 class AppStateManager(QObject):
     ui_pot_updated = Signal(str)
@@ -12,13 +13,16 @@ class AppStateManager(QObject):
     ui_hero_position_updated = Signal(str)
     ui_turn_updated = Signal(str)
     ui_action_updated = Signal(str)
+    log_decision_made = Signal(dict)
 
     def __init__(self):
         super().__init__()
         self.preflop_solver = PreflopSolver()
+        self.hand_id: str = "N/A"
         self.reset_state()
 
     def reset_state(self):
+        self.hand_id = str(uuid.uuid4())
         self.current_street: Street = Street.PREFLOP
         self.pot_value: float = 0.0
         self.community_cards: List[str] = []
@@ -104,8 +108,20 @@ class AppStateManager(QObject):
                     action_to_show = self.preflop_solver.get_preflop_action(self.hero_position, self.hero_cards_str.split(', '))
                 else:
                     action_to_show = "POSTFLOP (TBD)"
-            self.ui_action_updated.emit(action_to_show)
 
+            log_data = {
+                "hand_id": self.hand_id,
+                "street": self.current_street.name,
+                "hero_cards": self.hero_cards_str,
+                "hero_pos": self.hero_position.name,
+                "board_cards": ", ".join(self.community_cards) if self.community_cards else "",
+                "pot_value": self.pot_value,
+                "hero_action": "UNKNOWN", # <-- TODO: Get this from the API
+                "gto_action": action_to_show
+            }
+
+            self.log_decision_made.emit(log_data)
+            self.ui_action_updated.emit(action_to_show)
             self.ui_pot_updated.emit(str(self.pot_value))
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
             self.ui_board_updated.emit(board_str)
