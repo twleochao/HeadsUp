@@ -12,7 +12,10 @@ class Position(Enum):
     SB = auto()
     BB = auto()
     UTG = auto()
-    MP = auto()
+    UTG1 = auto()
+    UTG2 = auto()
+    LJ = auto()
+    HJ = auto()
     CO = auto()
     BTN = auto()
     

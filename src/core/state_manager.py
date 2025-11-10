@@ -19,6 +19,7 @@ class AppStateManager(QObject):
         super().__init__()
         self.preflop_solver = PreflopSolver()
         self.hand_id: str = "N/A"
+        self.big_blind: float = 2.0
         self.reset_state()
 
     def reset_state(self):
@@ -29,6 +30,7 @@ class AppStateManager(QObject):
         self.hero: PlayerData = None
         self.current_player_name: str = "N/A"
         self.hero_position: Position = Position.UNKNOWN
+        self.big_blind = 2.0
 
         self.hand_in_progress: bool = False
         self.hero_cards_str: str = "---"
@@ -124,10 +126,15 @@ class AppStateManager(QObject):
                     self.previous_hero_bet = self._parse_stack_value(hero_raw.bet_value) if hero_raw else 0.0
                     self.previous_pot_value = self.pot_value
 
+                    if raw_state.blinds and len(raw_state.blinds) > 1:
+                        self.big_blind = self._parse_stack_value(raw_state.blinds[1])
+
                     if self.current_street == Street.PREFLOP:
                         self.gto_action_to_log = self.preflop_solver.get_preflop_action(
                             self.hero_position,
-                            self.hero_cards_str.split(', ')
+                            self.hero_cards_str.split(', '),
+                            self.current_bet_to_call,
+                            self.big_blind 
                         )
                     else:
                         self.gto_action_to_log = {"action": "POSTFLOP (TBD)", "amount_str": ""}
@@ -232,45 +239,21 @@ class AppStateManager(QObject):
         if num_players < 2 or dealer_idx >= num_players or dealer_idx < 0:
             return positions
 
-        if num_players == 2:
-            positions[dealer_idx] = Position.SB
-            positions[(dealer_idx + 1) % num_players] = Position.BB
-        elif num_players == 3:
-            positions[dealer_idx] = Position.BTN
-            positions[(dealer_idx + 1) % num_players] = Position.SB
-            positions[(dealer_idx + 2) % num_players] = Position.BB
-        elif num_players == 4:
-            positions[dealer_idx] = Position.BTN
-            positions[(dealer_idx + 1) % num_players] = Position.SB
-            positions[(dealer_idx + 2) % num_players] = Position.BB
-            positions[(dealer_idx + 3) % num_players] = Position.CO
-        elif num_players == 5:
-            positions[dealer_idx] = Position.BTN
-            positions[(dealer_idx + 1) % num_players] = Position.SB
-            positions[(dealer_idx + 2) % num_players] = Position.BB
-            positions[(dealer_idx + 3) % num_players] = Position.MP
-            positions[(dealer_idx + 4) % num_players] = Position.CO
-        elif num_players == 6:
-            positions[dealer_idx] = Position.BTN
-            positions[(dealer_idx + 1) % num_players] = Position.SB
-            positions[(dealer_idx + 2) % num_players] = Position.BB
-            positions[(dealer_idx + 3) % num_players] = Position.UTG
-            positions[(dealer_idx + 4) % num_players] = Position.MP
-            positions[(dealer_idx + 5) % num_players] = Position.CO
-        else:
-            positions[dealer_idx] = Position.BTN
-            positions[(dealer_idx + 1) % num_players] = Position.SB
-            positions[(dealer_idx + 2) % num_players] = Position.BB
-            
-            pos_names = [Position.UTG, Position.MP, Position.CO]
-            if num_players == 8:
-                pos_names = [Position.UTG, Position.UTG, Position.MP, Position.CO]
-            elif num_players == 9:
-                pos_names = [Position.UTG, Position.UTG, Position.MP, Position.MP, Position.CO]
-            elif num_players == 10:
-                pos_names = [Position.UTG, Position.UTG, Position.UTG, Position.MP, Position.MP, Position.CO]
+        pos_map = {
+            2: [Position.BB, Position.BTN],
+            3: [Position.BB, Position.SB, Position.BTN],
+            4: [Position.BB, Position.SB, Position.BTN, Position.CO],
+            5: [Position.BB, Position.SB, Position.BTN, Position.CO, Position.HJ],
+            6: [Position.BB, Position.SB, Position.BTN, Position.CO, Position.HJ, Position.LJ],
+            7: [Position.BB, Position.SB, Position.BTN, Position.CO, Position.HJ, Position.LJ, Position.UTG2],
+            8: [Position.BB, Position.SB, Position.BTN, Position.CO, Position.HJ, Position.LJ, Position.UTG2, Position.UTG1],
+            9: [Position.BB, Position.SB, Position.BTN, Position.CO, Position.HJ, Position.LJ, Position.UTG2, Position.UTG1, Position.UTG],
+            10: [Position.BB, Position.SB, Position.BTN, Position.CO, Position.HJ, Position.LJ, Position.UTG2, Position.UTG1, Position.UTG, Position.UTG] 
+        }
 
-            for i in range(3, num_players - 1):
-                positions[(dealer_idx + i) % num_players] = pos_names[i-3]
+        current_pos = pos_map.get(num_players, [Position.UNKNOWN] * num_players)
         
+        for i in range(num_players):
+            pos_index = (i - 2) % num_players
+            positions[(dealer_idx + i) % num_players] = current_pos[pos_index]
         return positions
