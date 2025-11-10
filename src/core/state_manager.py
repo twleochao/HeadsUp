@@ -3,8 +3,11 @@ from PokerNow.models import GameState, PlayerInfo, PlayerState
 from src.core.datatypes import Street, Position
 from src.api.models import PlayerData
 from src.logic.preflop_solver import PreflopSolver
+from src.logic.postflop_solver import PostflopSolver
+from src.core.feature_eng import create_feature_vector
 from typing import List, Dict
 import uuid
+import numpy as np 
 
 class AppStateManager(QObject):
     ui_pot_updated = Signal(str)
@@ -18,6 +21,7 @@ class AppStateManager(QObject):
     def __init__(self):
         super().__init__()
         self.preflop_solver = PreflopSolver()
+        self.postflop_solver = PostflopSolver()
         self.hand_id: str = "N/A"
         self.big_blind: float = 2.0
         self.reset_state()
@@ -137,7 +141,15 @@ class AppStateManager(QObject):
                             self.big_blind 
                         )
                     else:
-                        self.gto_action_to_log = {"action": "POSTFLOP (TBD)", "amount_str": ""}
+                        features = create_feature_vector(
+                            hero_cards=self.hero_cards_str.split(', '),
+                            board_cards=self.community_cards,
+                            hero_pos=self.hero_position,
+                            pot_value=self.pot_value,
+                            bet_to_call=self.current_bet_to_call,
+                            big_blind=self.big_blind
+                        )
+                        self.gto_action_to_log = self.postflop_solver.get_postflop_action(features)
                 
                 action_to_show = f"{self.gto_action_to_log.get('action', '---')} {self.gto_action_to_log.get('amount_str', '')}"
                 self.ui_action_updated.emit(action_to_show.strip())
@@ -183,27 +195,6 @@ class AppStateManager(QObject):
 
             elif not self.is_awaiting_hero_action:
                 self.ui_action_updated.emit("---")
-
-#            action_to_show = "---"
-#            if self.hero and self.hero.name == self.current_player_name:
-#                if self.current_street == Street.PREFLOP:
-#                    action_to_show = self.preflop_solver.get_preflop_action(self.hero_position, self.hero_cards_str.split(', '))
-#                else:
-#                    action_to_show = "POSTFLOP (TBD)"
-#
-#            log_data = {
-#                "hand_id": self.hand_id,
-#                "street": self.current_street.name,
-#                "hero_cards": self.hero_cards_str,
-#                "hero_pos": self.hero_position.name,
-#                "board_cards": ", ".join(self.community_cards) if self.community_cards else "",
-#                "pot_value": self.pot_value,
-#                "hero_action": "UNKNOWN", # <-- TODO: Get this from the API
-#                "gto_action": action_to_show
-#            }
-#
-#            self.log_decision_made.emit(log_data)
-#            self.ui_action_updated.emit(action_to_show)
             self.ui_pot_updated.emit(str(self.pot_value))
             board_str = ", ".join(self.community_cards) if self.community_cards else "---"
             self.ui_board_updated.emit(board_str)
