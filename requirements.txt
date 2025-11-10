@@ -7,3 +7,5 @@ PokerNow
 pandas
 scikit-learn
 xgboost
+eval7
+tqdm
