@@ -9,7 +9,6 @@ DRIVER_PATH = os.path.join(os.getcwd(), "chromedriver.exe")
 try:
     if not os.path.exists(DRIVER_PATH):
         print(f"Error: chromedriver.exe not found at {DRIVER_PATH}")
-        print("Please download the matching version for your Chrome browser and place it in the project root.")
     else:
         service = Service(executable_path=DRIVER_PATH)
         driver = webdriver.Chrome(service=service)
