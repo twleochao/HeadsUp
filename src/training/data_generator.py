@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 import random
 import eval7
-from gto_oracle import GTOOracle
+from src.training.gto_oracle import GTOOracle
 from src.core.feature_eng import create_feature_vector
 from src.core.datatypes import Position
 

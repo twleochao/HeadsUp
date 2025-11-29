@@ -51,7 +51,7 @@ def _parse_range_notation(notation_list: list) -> set:
             
     return hands
 class PreflopSolver:
-    def __init__(self, chart_path: str = None):
+    def __init__(self, chart_path: str = "data/charts/rfi_9max.json"):
         self.charts = {}
         try:
             with open(chart_path, 'r') as f:

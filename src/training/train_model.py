@@ -16,8 +16,8 @@ def main():
         print(f"ERROR: Dataset not found. Run 'python training/data_generator.py' first.")
         return
 
-    X = dataset.iloc[:, :-1]
-    y = dataset.iloc[:, -1]
+    X = dataset.iloc[:, :-1].values
+    y = dataset.iloc[:, -1].values
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     print(f"Training XGBoost model on {len(X_train)} samples...")
